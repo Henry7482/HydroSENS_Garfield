@@ -1,0 +1,12 @@
+numpy
+pandas
+matplotlib
+glob2
+datetime
+geemap
+earthengine-api
+geopandas==0.14.0
+rasterio==1.3.8
+gdal==3.6.2
+
+pip>=21.0

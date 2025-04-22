@@ -1,6 +1,6 @@
 ### Import required libraries ###
-from GEE_Functions import *
-from Functions import *
+from GEE_Functions_update import *
+from Functions_update import *
 import matplotlib.pyplot
 import glob
 from spectral_libraries.core import amuses
@@ -440,7 +440,7 @@ def create_output_folder(base_output, date):
 
 
 ## Load necessary inputs and specify output folder ###
-output_master = r"Z:\Main\RSS-Hydro\Projects\01_Commercial\ADA\02_Work\02 Models\HydroSENS\Togo"
+output_master = r".\out"
 
 HSG250m = r"Z:\Main\RSS-Hydro\Projects\04_Product line\HydroSENS\02_Deliverables\02_Data\sol_texture.class_usda.tt_m_250m_b0..0cm_1950..2017_v0.2.tif"
 sli = r"Z:\Main\RSS-Hydro\Projects\04_Product line\HydroSENS\02_Deliverables\02_Data\VIS_speclib_sentinel.csv"
