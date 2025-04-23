@@ -160,7 +160,7 @@ def CreateInt(array, reference, array_name, output):
         None
 
     """
-    output_filename = output + "\\" + array_name + ".tif"
+    output_filename = output + "/" + array_name + ".tif"
     output_raster = gdal.GetDriverByName("GTiff").Create(output_filename, reference.RasterXSize,
                                                          reference.RasterYSize, 1, gdal.GDT_Int32)
     array_int = array.astype(np.int32)
@@ -184,7 +184,7 @@ def CreateFloat(array, reference, array_name, output):
         None
 
     """
-    output_filename = output + "\\" + array_name + ".tif"
+    output_filename = output + "/" + array_name + ".tif"
     output_raster = gdal.GetDriverByName("GTiff").Create(output_filename, reference.RasterXSize,
                                                          reference.RasterYSize, 1, gdal.GDT_Float64)
     output_raster.SetProjection(reference.GetProjection())

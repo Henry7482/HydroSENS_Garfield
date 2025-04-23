@@ -4,8 +4,8 @@ import geemap
 import os
 import pandas as pd
 
-service_account = 'pycharm@ee-chloecampo20.iam.gserviceaccount.com'
-credentials = ee.ServiceAccountCredentials(service_account, r"C:\Users\ben\PycharmProjects\CN_Project\update\ee-chloecampo20-eb6cd5fb671d.json")
+service_account = 'khoabui@hydrosens-garfield.iam.gserviceaccount.com'
+credentials = ee.ServiceAccountCredentials(service_account, r"./.secret/hydrosens-garfield-f6fe24f0d188.json")
 ee.Initialize(credentials)
 
 
@@ -87,7 +87,7 @@ def get_sentinel2_dates(aoi, start_date, end_date, max_cloud_coverage=30):
     return date_list
 
 
-def load_Sentinel2(aoi, StartDate, EndDate):
+def load_Sentinel2(shapefile_path, StartDate, EndDate):
     """
     load_Sentinel2
         This function is used to obtain a collection of Sentinel 2 images that
@@ -102,6 +102,8 @@ def load_Sentinel2(aoi, StartDate, EndDate):
         filtered_col: a collection of filtered images that meet the criteria
 
     """
+    aoi = geemap.shp_to_ee(shapefile_path)
+
     filtered_col1 = ee.ImageCollection('COPERNICUS/S2_SR_HARMONIZED')\
         .filterDate(StartDate,EndDate)\
         .filterBounds(aoi) \

@@ -14,13 +14,14 @@ import time
 start_time = time.time()
 
 def run_hydrosens (main_folder, start_date, end_date, output_master, amc, p):
-    shapefiles = [f for f in os.listdir(main_folder) if f.endswith('.shp')]
+    shapefiles_path = os.path.join(main_folder, 'shape')
+    shapefiles = [f for f in os.listdir(shapefiles_path) if f.endswith('.shp')]
     for shapefile in shapefiles:
         # Skip shapefiles that contain '_gcs' in their name
         if '_gcs' in shapefile:
             print(f"Skipping shapefile: {shapefile} (contains '_gcs')")
             continue
-        shapefile_path = os.path.join(main_folder, shapefile)
+        shapefile_path = os.path.join(shapefiles_path, shapefile)
         print(f"Processing shapefile: {shapefile_path}")
         aoi = geemap.shp_to_ee(shapefile_path)
         process_dates(start_date, end_date, aoi, output_master, amc, p, shapefile_path)
@@ -84,7 +85,7 @@ def process_dates(start_date, end_date, aoi, output_master, amc, p, shapefile_pa
 
 
 
-        bands = gdal.Open(output + r"\Bands.tif")
+        bands = gdal.Open(output + r"/Bands.tif")
         band_array = bands.ReadAsArray()
         arr3 = bands.GetRasterBand(2).ReadAsArray().astype('float64')
         arr4 = bands.GetRasterBand(3).ReadAsArray().astype('float64')
@@ -109,21 +110,21 @@ def process_dates(start_date, end_date, aoi, output_master, amc, p, shapefile_pa
         del MNDWI
 
         # Sieve sparse, unconnected pixels in MNDWI to maintain contiguous water bodies
-        null = gdal.Open(output + r"\null_MNDWI.tif", 1)
+        null = gdal.Open(output + r"/null_MNDWI.tif", 1)
         Band = null.GetRasterBand(1)
         gdal.SieveFilter(srcBand=Band, maskBand=None, dstBand=Band, threshold=16, connectedness=8)
         del null, Band
 
         # Mask out water
-        mask = gdal.Open(output + r"\null_MNDWI.tif")
+        mask = gdal.Open(output + r"/null_MNDWI.tif")
         mask_array = mask.ReadAsArray()
 
         # Mask and save all bands of band_array
         driver = gdal.GetDriverByName('GTiff')
-        output_raster_path = output + r"\bands_masked.tif"
+        output_raster_path = output + r"/bands_masked.tif"
         if os.path.exists(output_raster_path):
             os.remove(output_raster_path)
-        output_raster = driver.Create(output + r"\bands_masked.tif", bands.RasterXSize, bands.RasterYSize,
+        output_raster = driver.Create(output + r"/bands_masked.tif", bands.RasterXSize, bands.RasterYSize,
                                       band_array.shape[0],
                                       gdal.GDT_Float64)
         output_raster.SetProjection(bands.GetProjection())
@@ -139,13 +140,13 @@ def process_dates(start_date, end_date, aoi, output_master, amc, p, shapefile_pa
         ### MESMA ###
 
         # Prepare image and spectral library for MESMA
-        input_img = r"\Bands.tif"
+        input_img = r"/Bands.tif"
         image = gdal.Open(output + input_img)
         image_array = image.ReadAsArray()
         image_array[np.isnan(image_array)] = -9999
         image_array[np.isinf(image_array)] = -9999
         image_array[image_array == 0] = -9999
-        img = prepare_S2image(output + r"\bands_masked.tif")
+        img = prepare_S2image(output + r"/bands_masked.tif")
         class_list_init_, initial_lib = prepare_sli(sli, num_bands=8)
         A = amuses.Amuses()
         em_spectra_dict = A.execute(image_array, initial_lib, 0.9, 0.95, 15, (0.0002, 0.02))
@@ -154,7 +155,7 @@ def process_dates(start_date, end_date, aoi, output_master, amc, p, shapefile_pa
         class_list_init, em_spectra_trim = trimmed_library(sli,
                                                            num_bands=8, row_numbers=indices_array)
 
-        output_file = output + r"\trimmed_library.csv"
+        output_file = output + r"/trimmed_library.csv"
         wavelengths = [490, 560, 665, 783, 842, 865, 1610, 2190]
 
         data = {
@@ -165,9 +166,9 @@ def process_dates(start_date, end_date, aoi, output_master, amc, p, shapefile_pa
         material_order = ['vegetation', 'impervious', 'soil']
         df['MaterialClass'] = pd.Categorical(df['MaterialClass'], categories=material_order, ordered=True)
         df = df.sort_values('MaterialClass')
-        output_csv = output + r"\trimmed_library.csv"
+        output_csv = output + r"/trimmed_library.csv"
         df.to_csv(output_csv, index=False)
-        class_list, trim_lib = prepare_sli(output + r"\trimmed_library.csv", num_bands=8)
+        class_list, trim_lib = prepare_sli(output + r"/trimmed_library.csv", num_bands=8)
 
         # Run MESMA algorithm using trimmed spectral library
         out_fractions = doMESMA(class_list, img, trim_lib)
@@ -182,34 +183,34 @@ def process_dates(start_date, end_date, aoi, output_master, amc, p, shapefile_pa
 
 
         del img
-        os.remove(output + r"\trimmed_library.csv")
+        os.remove(output + r"/trimmed_library.csv")
         CreateFloat(soil, image, "soil", output)
         CreateFloat(impervious, image, "impervious", output)
         CreateFloat(vegetation, image, "vegetation", output)
 
         ### Global Soil Dataset Processing ###
 
-        output_path = output + r"\new_shapefile.shp"
+        output_path = output + r"/new_shapefile.shp"
         Create_buffer(shapefile_path, output_path)
 
         # Matching global dataset projection to new shapefile in order to extract by mask
-        data = gpd.read_file(output + r"\new_shapefile.shp")
+        data = gpd.read_file(output + r"/new_shapefile.shp")
         HSG250m_open = gdal.Open(HSG250m)
         setcrs = HSG250m_open.GetProjection()
         data = data.to_crs(setcrs)
-        data.to_file(output + r"\new_shapefile.shp")
+        data.to_file(output + r"/new_shapefile.shp")
         del data
 
         # Extract study area from global dataset
         HSGraster = rasterio.open(HSG250m)
-        newshape = gpd.read_file(output + r"\new_shapefile.shp")
-        initialExtract = Extract(HSG250m, output + r"\new_shapefile.shp", output + r"\extracted.tif", nodata_value=255)
+        newshape = gpd.read_file(output + r"/new_shapefile.shp")
+        initialExtract = Extract(HSG250m, output + r"/new_shapefile.shp", output + r"/extracted.tif", nodata_value=255)
 
         # Reproject extracted raster to match MNDWI
-        MNDWI = gdal.Open(output + r"\null_MNDWI.tif")
+        MNDWI = gdal.Open(output + r"/null_MNDWI.tif")
         setcrs = MNDWI.GetProjection()
-        inputfile = output + r"\extracted.tif"
-        output_raster = output + r"\HSG_match.tif"
+        inputfile = output + r"/extracted.tif"
+        output_raster = output + r"/HSG_match.tif"
 
         # Extract the resolution information from the MNDWI raster
         MNDWI_geotransform = MNDWI.GetGeoTransform()
@@ -218,25 +219,25 @@ def process_dates(start_date, end_date, aoi, output_master, amc, p, shapefile_pa
                          yRes=MNDWI_res[1], outputType=gdal.GDT_Int16)
 
         del inputfile, output_raster, MNDWI, warp
-        os.remove(output + r"\extracted.tif")
+        os.remove(output + r"/extracted.tif")
 
         # Fill NoData holes in the extracted data
-        reference = gdal.Open(output + r"\HSG_match.tif")
-        data = matplotlib.pyplot.imread(output + r"\HSG_match.tif")
+        reference = gdal.Open(output + r"/HSG_match.tif")
+        data = matplotlib.pyplot.imread(output + r"/HSG_match.tif")
         filled = Fill(data)
         CreateInt(filled, reference, "filled", output)
         matplotlib.pyplot.close()
         reference = None
         del data, filled, reference
 
-        os.remove(output + r"\new_shapefile.shp")
-        os.remove(output + r"\new_shapefile.shx")
-        os.remove(output + r"\new_shapefile.cpg")
-        os.remove(output + r"\new_shapefile.dbf")
-        os.remove(output + r"\new_shapefile.prj")
+        os.remove(output + r"/new_shapefile.shp")
+        os.remove(output + r"/new_shapefile.shx")
+        os.remove(output + r"/new_shapefile.cpg")
+        os.remove(output + r"/new_shapefile.dbf")
+        os.remove(output + r"/new_shapefile.prj")
 
         # Reclassify to HSG value
-        soilraster = gdal.Open(output + r"\filled.tif")
+        soilraster = gdal.Open(output + r"/filled.tif")
         reclass = soilraster.ReadAsArray()
 
         reclass[np.where((1 <= reclass) & (reclass <= 3))] = 4
@@ -249,15 +250,15 @@ def process_dates(start_date, end_date, aoi, output_master, amc, p, shapefile_pa
         CreateInt(reclass, soilraster, "HSG_reclass", output)
         del soilraster
 
-        extract_raster(output + r"\HSG_reclass.tif", output + r"\null_MNDWI.tif", output + r"\HSG_final.tif")
+        extract_raster(output + r"/HSG_reclass.tif", output + r"/null_MNDWI.tif", output + r"/HSG_final.tif")
 
-        os.remove(output + r"\HSG_reclass.tif")
-        os.remove(output + r"\filled.tif")
+        os.remove(output + r"/HSG_reclass.tif")
+        os.remove(output + r"/filled.tif")
 
         ### Initial CN classification for vegetation and soil ###
 
         # Reclassify NDVI
-        NDVI = gdal.Open(output + r"\NDVI.tif")
+        NDVI = gdal.Open(output + r"/NDVI.tif")
         newNDVI = NDVI.ReadAsArray()
         newNDVI[newNDVI >= 0.62] = 10
         newNDVI[np.where((0.55 <= newNDVI) & (newNDVI < 0.62))] = 20
@@ -279,15 +280,15 @@ def process_dates(start_date, end_date, aoi, output_master, amc, p, shapefile_pa
 
         CreateInt(array1, NDVI, "veghealth", output)
         finalshape = gpd.read_file(shapefile_path)
-        masked = rasterio.open(output + r"\veghealth.tif")
-        Extract(output + r"\veghealth.tif", shapefile_path, output + r"\Vegetation_Health.tif", nodata_value=255)
+        masked = rasterio.open(output + r"/veghealth.tif")
+        Extract(output + r"/veghealth.tif", shapefile_path, output + r"/Vegetation_Health.tif", nodata_value=255)
         masked = None
-        os.remove(output + r"\veghealth.tif")
+        os.remove(output + r"/veghealth.tif")
 
         # Get files
-        file2 = gdal.Open(output + r"\HSG_final.tif")
+        file2 = gdal.Open(output + r"/HSG_final.tif")
         array2 = file2.ReadAsArray()
-        CN_table = r"C:\Users\ben\PycharmProjects\CN_Project\CN_lookup.csv"
+        CN_table = r"./data/CN_lookup.csv"
 
         # Vegetation CN Reclassification
         veg_reclass = classification(CN_table, array1, array2)
@@ -297,7 +298,7 @@ def process_dates(start_date, end_date, aoi, output_master, amc, p, shapefile_pa
         soil_reclass = classification(CN_table, array3, array2)
 
         file2 = None
-        os.remove(output + r"\HSG_final.tif")
+        os.remove(output + r"/HSG_final.tif")
 
         # CCN calculation
         imp_CN = 98
@@ -306,7 +307,7 @@ def process_dates(start_date, end_date, aoi, output_master, amc, p, shapefile_pa
         ### Slope Correction ###
 
         # Create slope map isolating pixels >5%
-        DEMfile = gdal.Open(output + r"\DEM.tif")
+        DEMfile = gdal.Open(output + r"/DEM.tif")
         DEM = DEMfile.ReadAsArray()
         cellsize = 10
 
@@ -344,16 +345,16 @@ def process_dates(start_date, end_date, aoi, output_master, amc, p, shapefile_pa
         curve_number.append(np.nanmean(CCN_arr_final))
         CreateInt(CCN_arr_final, DEMfile, "CCN_masked", output)
         finalshape = gpd.read_file(shapefile_path)
-        masked = rasterio.open(output + r"\CCN_masked.tif")
-        Extract(output + r"\CCN_masked.tif", shapefile_path, output + f"\CCN_final.tif", nodata_value=255)
+        masked = rasterio.open(output + r"/CCN_masked.tif")
+        Extract(output + r"/CCN_masked.tif", shapefile_path, output + f"/CCN_final.tif", nodata_value=255)
 
 
         del masked, mask, DEMfile
-        os.remove(output + r"\CCN_masked.tif")
-        os.remove(output + r"\null_MNDWI.tif")
-        os.remove(output + r"\HSG_match.tif")
-        os.remove(output + r"\DEM.tif")
-        os.remove(output+ r'\impervious.tif')
+        os.remove(output + r"/CCN_masked.tif")
+        os.remove(output + r"/null_MNDWI.tif")
+        os.remove(output + r"/HSG_match.tif")
+        os.remove(output + r"/DEM.tif")
+        os.remove(output+ r'/impervious.tif')
 
         ### Runoff Calculation ###
 
@@ -365,7 +366,7 @@ def process_dates(start_date, end_date, aoi, output_master, amc, p, shapefile_pa
         """
 
         # Storage
-        CCN = gdal.Open(output + r"\CCN_final.tif")
+        CCN = gdal.Open(output + r"/CCN_final.tif")
         CCN_array = CCN.ReadAsArray()
 
         storage = 254 * (1 - (CCN_array / 100.0))
@@ -440,13 +441,13 @@ def create_output_folder(base_output, date):
 
 
 ## Load necessary inputs and specify output folder ###
-output_master = r"Z:\Main\RSS-Hydro\Projects\01_Commercial\ADA\02_Work\02 Models\HydroSENS\Togo"
+output_master = r"./data"
 
-HSG250m = r"Z:\Main\RSS-Hydro\Projects\04_Product line\HydroSENS\02_Deliverables\02_Data\sol_texture.class_usda.tt_m_250m_b0..0cm_1950..2017_v0.2.tif"
-sli = r"Z:\Main\RSS-Hydro\Projects\04_Product line\HydroSENS\02_Deliverables\02_Data\VIS_speclib_sentinel.csv"
+HSG250m = r"./data/sol_texture.class_usda.tt_m_250m_b0..0cm_1950..2017_v0.2.tif"
+sli = r"./data/VIS_speclib_sentinel.csv"
 
-StartDate = '2024-04-12'
-EndDate = '2024-04-25'
+StartDate = '2024-12-12'
+EndDate = '2024-12-25'
 
 amc = 2  # AMC I (1), AMC II (2), AMC III (3)
 p = 100  # Precipitation in mm

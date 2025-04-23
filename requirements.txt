@@ -1,0 +1,16 @@
+cdsapi
+ee
+geemap
+geopandas
+matplotlib
+mesma
+netCDF4
+numpy
+gdal
+pandas
+rasterio
+rioxarray
+scipy
+spectral_libraries
+xarray
+pycrs
