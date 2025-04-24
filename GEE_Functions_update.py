@@ -87,7 +87,7 @@ def get_sentinel2_dates(aoi, start_date, end_date, max_cloud_coverage=30):
     return date_list
 
 
-def load_Sentinel2(shapefile_path, StartDate, EndDate):
+def load_Sentinel2(aoi, StartDate, EndDate):
     """
     load_Sentinel2
         This function is used to obtain a collection of Sentinel 2 images that
@@ -102,8 +102,7 @@ def load_Sentinel2(shapefile_path, StartDate, EndDate):
         filtered_col: a collection of filtered images that meet the criteria
 
     """
-    aoi = geemap.shp_to_ee(shapefile_path)
-
+    
     filtered_col1 = ee.ImageCollection('COPERNICUS/S2_SR_HARMONIZED')\
         .filterDate(StartDate,EndDate)\
         .filterBounds(aoi) \
