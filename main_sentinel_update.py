@@ -208,7 +208,9 @@ def process_dates(start_date, end_date, aoi, output_master, amc, p, shapefile_pa
 
         # Reproject extracted raster to match MNDWI
         MNDWI = gdal.Open(output + r"/null_MNDWI.tif")
+        print(output + r"/null_MNDWI.tif")
         setcrs = MNDWI.GetProjection()
+        print("MNDWI CRS", setcrs)
         inputfile = output + r"/extracted.tif"
         output_raster = output + r"/HSG_match.tif"
 
@@ -447,7 +449,7 @@ HSG250m = r"./data/sol_texture.class_usda.tt_m_250m_b0..0cm_1950..2017_v0.2.tif"
 sli = r"./data/VIS_speclib_sentinel.csv"
 
 StartDate = '2024-12-12'
-EndDate = '2024-12-25'
+EndDate = '2024-12-15'
 
 amc = 2  # AMC I (1), AMC II (2), AMC III (3)
 p = 100  # Precipitation in mm
