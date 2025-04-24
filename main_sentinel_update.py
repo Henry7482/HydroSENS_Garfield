@@ -1,6 +1,6 @@
 ### Import required libraries ###
-from GEE_Functions import *
-from Functions import *
+from GEE_Functions_update import *
+from Functions_update import *
 import matplotlib.pyplot
 import glob
 from spectral_libraries.core import amuses
