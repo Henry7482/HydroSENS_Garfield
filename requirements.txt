@@ -6,7 +6,7 @@ matplotlib
 mesma
 netCDF4
 numpy
-gdal
+gdal==3.6.2
 pandas
 rasterio
 rioxarray
