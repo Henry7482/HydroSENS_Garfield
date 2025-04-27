@@ -59,7 +59,9 @@ def process_dates(start_date, end_date, aoi, output_master, amc, p, shapefile_pa
             continue
 
         dates_with_images.append(date)
+        
         output = create_output_folder(output_master, date)
+        print("Output: ", output)
 
         print(f"Image found for {date}, creating output folder.")
 
@@ -77,6 +79,7 @@ def process_dates(start_date, end_date, aoi, output_master, amc, p, shapefile_pa
 
         target = CDS_temp(date, output)
         df = extract_data(target)
+        print("shape file path: ", shapefile_path)
         avg_temp = get_temp(shapefile_path, df)
 
         target = CDS_precip(date, output)
@@ -167,6 +170,7 @@ def process_dates(start_date, end_date, aoi, output_master, amc, p, shapefile_pa
         df['MaterialClass'] = pd.Categorical(df['MaterialClass'], categories=material_order, ordered=True)
         df = df.sort_values('MaterialClass')
         output_csv = output + r"/trimmed_library.csv"
+        print("output_csv", output_csv)
         df.to_csv(output_csv, index=False)
         class_list, trim_lib = prepare_sli(output + r"/trimmed_library.csv", num_bands=8)
 
@@ -210,6 +214,7 @@ def process_dates(start_date, end_date, aoi, output_master, amc, p, shapefile_pa
         MNDWI = gdal.Open(output + r"/null_MNDWI.tif")
         print(output + r"/null_MNDWI.tif")
         setcrs = MNDWI.GetProjection()
+        
         print("MNDWI CRS", setcrs)
         inputfile = output + r"/extracted.tif"
         output_raster = output + r"/HSG_match.tif"
@@ -454,7 +459,7 @@ EndDate = '2024-12-23'
 amc = 2  # AMC I (1), AMC II (2), AMC III (3)
 p = 100  # Precipitation in mm
 
-run_hydrosens(output_master, StartDate, EndDate, output_master, amc, p)
+# run_hydrosens(output_master, StartDate, EndDate, output_master, amc, p)
 
 end_time = time.time()
 

@@ -5,7 +5,8 @@ services:
             - ./data:/app/data
         environment:
             - PYTHONUNBUFFERED=1
-        network_mode: host # Only works on Linux
         dns:
             - 8.8.8.8
             - 8.8.4.4
+        ports:
+            - "5000:5000"
