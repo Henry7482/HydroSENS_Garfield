@@ -13,21 +13,30 @@ import time
 # Start the timer
 start_time = time.time()
 
-def run_hydrosens (main_folder, start_date, end_date, output_master, amc, p):
+def run_hydrosens (main_folder, start_date, end_date, output_master, amc, p, shapefile):
+    print("Shapefile Name: ", shapefile.filename)
+    if '_gcs' in shapefile.filename:
+        print(f"Skipping shapefile: {shapefile.filename} (contains '_gcs')")
+        return None
+
     shapefiles_path = os.path.join(main_folder, 'shape')
-    shapefiles = [f for f in os.listdir(shapefiles_path) if f.endswith('.shp')]
-    for shapefile in shapefiles:
-        # Skip shapefiles that contain '_gcs' in their name
-        if '_gcs' in shapefile:
-            print(f"Skipping shapefile: {shapefile} (contains '_gcs')")
-            continue
-        shapefile_path = os.path.join(shapefiles_path, shapefile)
-        print(f"Processing shapefile: {shapefile_path}")
-        aoi = geemap.shp_to_ee(shapefile_path)
-        return process_dates(start_date, end_date, aoi, output_master, amc, p, shapefile_path)
+    print("Shapefiles path: ", shapefiles_path)
+    os.makedirs(shapefiles_path, exist_ok=True)
+
+    # Save the shapefile to disk
+    shapefile_path = os.path.join(shapefiles_path, shapefile.filename)
+    with open(shapefile_path, "wb") as buffer:
+        buffer.write(shapefile.read())
+
+
+    print(f"Processing shapefile: {shapefile_path}")
+    aoi = geemap.shp_to_ee(shapefile_path)
+    return process_dates(start_date, end_date, aoi, output_master, amc, p, shapefile_path)
 
 def process_dates(start_date, end_date, aoi, output_master, amc, p, shapefile_path):
     """Process Sentinel-2 images within a date range if imagery exists."""
+    HSG250m = os.getenv("HSG250m")
+    sli = os.getenv("SLI")
     dates_with_images = []
     vegetation_values = []
     impervious_values = []
@@ -441,26 +450,6 @@ def create_output_folder(base_output, date):
     if not os.path.exists(folder_path):
         os.makedirs(folder_path)
     return folder_path
-
-
-# ## Load necessary inputs and specify output folder ###
-# output_master = r"./data"
-
-HSG250m = r"./data/sol_texture.class_usda.tt_m_250m_b0..0cm_1950..2017_v0.2.tif"
-sli = r"./data/VIS_speclib_sentinel.csv"
-
-# StartDate = '2024-12-23'
-# EndDate = '2025-12-23'
-
-# amc = 2  # AMC I (1), AMC II (2), AMC III (3)
-# p = 100  # Precipitation in mm
-
-# # date =run_hydrosens(output_master, StartDate, EndDate, output_master, amc, p)
-# # print("Dates with images:", date)
-# end_time = time.time()
-
-# # Calculate and print the duration
-# print(f"Script took {end_time - start_time:.2f} seconds to run.")
 
 
 
