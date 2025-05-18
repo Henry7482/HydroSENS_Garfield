@@ -407,7 +407,21 @@ def process_dates(start_date, end_date, aoi, output_master, amc, p, shapefile_pa
         'ndvi': ndvi_values,
         'temperature': avg_temp,
         'precipitation': avg_p
-            }
+    }
+    
+    formatted_data = {}
+
+    for i in range(len(data['date'])):
+        date = data['date'][i]
+        formatted_data[date] = {
+            "ndvi": data['ndvi'][i],
+            "soil-fraction": data['soil_mean'][i],
+            "vegetation-fraction": data['veg_mean'][i],
+            "precipitation": data['precipitation'],
+            "temperature": data['temperature'],
+            "curve-number": data['curve_number'][i]
+        }
+
     df = pd.DataFrame(data)
     df = df[
     (df[['veg_mean', 'soil_mean', 'curve_number', 'ndvi', 'temperature']] != 0).all(axis=1)
@@ -437,7 +451,7 @@ def process_dates(start_date, end_date, aoi, output_master, amc, p, shapefile_pa
                 print(f"Deleted folder: {date_folder}")
             except Exception as e:
                 print(f"Failed to delete {date_folder}: {e}")
-    return data
+    return formatted_data
 
 
 def create_output_folder(base_output, date):

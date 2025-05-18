@@ -21,7 +21,7 @@ def run_hydrosens_endpoint():
         p = int(p) if p else None
 
         data = run_hydrosens(output_master, start_date, end_date, output_master, amc, p, shapefile)
-        result = {"message": "Hydrosens run completed successfully", "data": data}
+        result = {"message": "Hydrosens run completed successfully", "outputs": data}
         print("Data:", data)
         return jsonify(result), 200
     except Exception as e:
