@@ -1,5 +1,5 @@
 from flask import Flask, request, jsonify
-from main_sentinel_update import run_hydrosens
+from utils.main_sentinel_update import run_hydrosens
 import os
 
 app = Flask(__name__)
