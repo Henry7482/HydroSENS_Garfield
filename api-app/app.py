@@ -20,8 +20,8 @@ def analyze():
         }
 
         data_payload = {
-            "startDate": request.form.get("startDate"),
-            "endDate": request.form.get("endDate"),
+            "start_date": request.form.get("start_date"),
+            "end_date": request.form.get("end_date"),
             "amc": request.form.get("amc"),
             "p": request.form.get("p"),
         }
