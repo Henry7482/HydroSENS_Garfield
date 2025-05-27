@@ -1,0 +1,37 @@
+services:
+  hydrosens:
+    build:
+      context: ./hydrosens   # Folder where the HydroSENS Dockerfile is
+    container_name: hydrosens
+    ports:
+      - "5000:5000"           # Expose it to the host
+    networks:
+      - app-network
+    environment:
+      - PYTHONUNBUFFERED=1
+    depends_on:
+      - api                   # Optional: only if hydrosens needs the API (can be removed)
+    env_file:
+      - ./hydrosens/.env   
+  api:
+    build:
+      context: ./api-app              # Your API is in current directory
+    container_name: analyze
+    volumes:
+      - ./data:/app/data
+    environment:
+      - PYTHONUNBUFFERED=1
+      - HYDROSENS_URL=http://hydrosens:5000/hydrosens   # 👈 Very important
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
+    ports:
+      - "5050:5050"
+    env_file:
+      - ./api-app/.env
+    networks:
+      - app-network
+
+networks:
+  app-network:
+    driver: bridge
