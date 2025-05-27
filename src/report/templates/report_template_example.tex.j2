@@ -1,0 +1,63 @@
+% templates/my_report_template.tex.j2
+\documentclass[11pt, a4paper]{article}
+\usepackage[utf8]{inputenc}
+\usepackage{amsmath}
+\usepackage{graphicx}
+\usepackage{array}
+\usepackage{booktabs} % For better tables
+\usepackage[margin=1in]{geometry} % Adjust margins
+
+\title{Financial Report for \VAR{ report_period | e }}
+\author{\VAR{ author_name | e }}
+\date{\VAR{ report_date | e }}
+
+\begin{document}
+\maketitle
+\begin{abstract}
+This report summarizes the key financial metrics for \VAR{ client_name | e }
+during the period of \VAR{ report_period | e }.
+\end{abstract}
+
+\section{Introduction}
+Welcome, \VAR{ client_contact_person | e }. This document provides an overview of recent financial activities.
+Special notes: \VAR{ introduction_notes | e }
+
+\BLOCK{if logo_path}
+\begin{figure}[h!]
+  \centering
+  \includegraphics[width=0.3\textwidth]{\VAR{ logo_filename | e }}
+  \caption{Company Logo}
+  \label{fig:logo}
+\end{figure}
+\BLOCK{endif}
+
+\section{Key Financial Data}
+\begin{itemize}
+    \item Revenue: \VAR{ currency_symbol | e } \VAR{ revenue | e }
+    \item Expenses: \VAR{ currency_symbol | e } \VAR{ expenses | e }
+    \item Profit: \VAR{ currency_symbol | e } \VAR{ profit | e }
+\end{itemize}
+
+\BLOCK{if detailed_transactions}
+\section{Detailed Transactions}
+\begin{table}[h!]
+  \centering
+  \caption{Transaction Summary}
+  \label{tab:transactions}
+  \begin{tabular}{l r r}
+    \toprule
+    Description & Amount (\VAR{ currency_symbol | e }) & Status \\
+    \midrule
+    \BLOCK{for tx in detailed_transactions}
+    \VAR{ tx.description | e } & \VAR{ tx.amount | e } & \VAR{ tx.status | e } \\
+    \BLOCK{endfor}
+    \bottomrule
+  \end{tabular}
+\end{table}
+\BLOCK{endif}
+
+\section{Conclusion}
+\VAR{ conclusion_text | e }
+
+Thank you.
+\end{document}

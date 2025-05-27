@@ -1,0 +1,189 @@
+\documentclass[12pt,a4paper]{article}
+\usepackage[utf8]{inputenc}
+\usepackage{geometry}
+\usepackage{tikz}
+\usepackage{xcolor}
+\usepackage{graphicx}
+\usepackage{titlesec}
+\usepackage{fancyhdr}
+\usepackage{tcolorbox}
+\usepackage{enumitem}
+\usepackage{pgfplots}
+\pgfplotsset{compat=1.18}
+
+% Font packages - Choose ONE of these options:
+% \usepackage{helvet} % Option 1: Helvetica (sans-serif)
+\renewcommand{\familydefault}{\sfdefault} % Use sans-serif font as default
+
+% Uncomment just ONE of these font alternatives if you want to try them:
+% \usepackage{tgpagella} % Option 2: TeX Gyre Pagella (similar to Palatino)
+% \usepackage{bookman} % Option 3: Bookman
+% \usepackage{tgheros} % Option 4: TeX Gyre Heros (similar to Helvetica but enhanced)
+% \usepackage{lmodern} % Option 5: Latin Modern 
+% \usepackage{libertine} % Option 6: Linux Libertine (elegant serif)
+\usepackage{mathpazo} % Option 7: Palatino
+% \usepackage{charter} % Option 8: Charter
+
+% Define colors
+\definecolor{hydrosensblue}{RGB}{37, 51, 114}
+\definecolor{hydrosenscyan}{RGB}{81, 186, 215}
+
+% Page setup
+\geometry{
+    top=2cm,
+    bottom=2cm,
+    left=2cm,
+    right=2cm
+}
+
+% Set up fancy headers
+\pagestyle{fancy}
+\fancyhead{}
+\fancyfoot{}
+\renewcommand{\headrulewidth}{0pt}
+\renewcommand{\footrulewidth}{0pt}
+
+% Title formatting
+\titleformat{\section}
+  {\normalfont\Large\bfseries\color{hydrosensblue}}
+  {}
+  {0em}
+  {}[\titlerule]
+
+\titleformat{\subsection}
+  {\normalfont\large\bfseries\color{hydrosensblue}}
+  {}
+  {0em}
+  {}
+
+% Document begin
+\begin{document}
+
+% First page (cover)
+\begin{titlepage}
+    \textbf{\Huge \color{hydrosensblue}{RSS}}
+    
+    \vspace{0.5cm}
+    
+    \textbf{\huge \color{hydrosensblue}{HYDROSENS}}
+    
+    \vspace{0.5cm}
+    
+    \textbf{\Large{ENVIRONMENTAL MONITORING REPORT}}
+    
+    \vspace{1cm}
+    
+    \vspace{1cm}
+    
+    \textbf{\Large{REGION : \quad \VAR{ location | e }}}
+    
+    \vspace{0.5cm}
+    
+    \textbf{\Large{TIME PERIOD : \quad \VAR{ time_period | e }}}
+\end{titlepage}
+
+\newpage
+
+% Overview page
+\section*{OVERVIEW}
+
+\begin{minipage}{\textwidth}
+\VAR{ overview | e }
+\end{minipage}
+
+\vspace{1cm}
+
+\begin{tcolorbox}[title={\textbf{KEY INSIGHTS}}, colback=white, colframe=hydrosensblue]
+\begin{enumerate}[label=\textbf{\arabic*.}, leftmargin=1.5em]
+\BLOCK{ for insight in key_insights }
+    \item \textbf{\VAR{ insight.title | e}}\\
+    \VAR{ insight.detail | e}
+\BLOCK{ endfor }
+\end{enumerate}
+\end{tcolorbox}
+
+% Metric pages
+\BLOCK{ for metric in metrics }
+\BLOCK{ if metric.selected }
+
+\newpage
+
+\section*{\VAR{ metric.title | e }}
+\textit{\VAR{ metric.description | e}}
+
+\vspace{0.5cm}
+
+\parbox{\textwidth}{ % Keep this parbox for horizontal layout
+    \begin{minipage}[t]{0.48\textwidth}
+        \vspace{0.3cm}
+        \textbf{\Large{\VAR{ "%.2f"|format(metric.mean_value) | e }}}
+        \vspace{0.3cm}
+        \textbf{MEAN VALUE}\\
+        \VAR{ metric.mean_insight | e }
+        \vspace{0.5cm}
+
+        \textbf{TIME SERIES INSIGHT}\\
+        \VAR{ metric.time_insight | e }
+    \end{minipage}\hfill
+    \begin{minipage}[t]{0.48\textwidth}
+        \begin{center}
+            \begin{tikzpicture}
+            \begin{axis}[
+                width=\linewidth,
+                height=8cm,
+                xlabel={Date},
+                ylabel={\VAR{ metric.id | replace("_", " ") | title | e}},
+                xmin=1, xmax=\VAR{ metric.series|length },
+                % Use xtick=data to let pgfplots figure out ticks from xticklabels
+                xtick=data,
+                xticklabels={ % Use a join filter to ensure no trailing commas or extra spaces
+                    \VAR{ metric.series | map(attribute='timestamp') | join(', ') | e }
+                },
+                title={\VAR{ metric.title | e} Time Series},
+                grid=both,
+                xticklabel style={rotate=45,anchor=east},
+                enlargelimits=false,
+                % Add "unbounded coords=jump" to handle potential non-numeric data gracefully
+                unbounded coords=jump
+            ]
+            \addplot[
+                color=hydrosenscyan,
+                mark=*,
+                thick,
+            ]
+            coordinates {
+                % Safely generate coordinates on a single line
+                \BLOCK{ for i in range(metric.series|length) }
+                    \BLOCK{ set x = i + 1 }
+                    \BLOCK{ set y_val = metric.series[i].value }
+                    % Ensure y_val is numeric and not empty/None.
+                    % If it could be missing, you might need a conditional check here
+                    % e.g., {% if y_val is not none and y_val is number %}
+                    (\VAR{ x }, \VAR{ y_val | default('nan') }) % Use 'nan' for missing values
+                \BLOCK{ endfor }
+            };
+            \end{axis}
+            \end{tikzpicture}
+        \end{center}
+    \end{minipage}%
+}\par % Keep this \par immediately after the closing brace of the \parbox
+\vspace{1cm}
+
+\BLOCK{ endif }
+\BLOCK{ endfor }
+
+\newpage
+
+% Action Plans Page
+\section*{ACTION PLANS}
+
+\begin{tcolorbox}[colback=white, colframe=hydrosenscyan]
+Based on the data, the following actions are suggested:
+\begin{itemize}
+    \BLOCK{ for action in action_plan }
+    \item \textbf{\VAR{ action | e }}
+\BLOCK{ endfor }
+\end{itemize}
+\end{tcolorbox}
+
+\end{document}

@@ -1,0 +1,65 @@
+# generate_report.py
+import os
+from report_templating import render_latex_template
+from latex_utils import compile_latex_to_pdf
+from generate_content import generate_content
+from templates.mock_data import report_data
+
+
+def run_generate_report(metrics_data):
+    # --- Configuration ---
+    TEMPLATE_DIR = "templates"
+    TEMPLATE_FILENAME = "report_template.tex.j2" # Assumes file-based template
+    OUTPUT_DIR = "generated_reports"
+    REPORT_JOBNAME = "RSS_Hydro_Region_Report_2025"
+    KEEP_TEX = True # Set to False to delete the .tex file after compilation
+
+    # --- 1. Get data for the Report ---
+    print("Step 1: Generating content...")
+    # report_data = generate_content(metrics_data)
+    report_data = metrics_data # FOR DEMO ONLY
+
+    # --- 2. Render the LaTeX template ---
+    print("Step 2: Rendering LaTeX template...")
+    # Option A: Load template from file
+    template_full_path = os.path.join(TEMPLATE_DIR, TEMPLATE_FILENAME)
+    if not os.path.exists(template_full_path):
+        print(f"Error: Template file not found at {template_full_path}")
+        print("Please create 'templates/report_template.tex.j2' or check the path.")
+        return
+
+    rendered_latex = render_latex_template(template_full_path, report_data, TEMPLATE_DIR)
+    
+    # Option B: Use a raw string template (if you prefer not to use files for templates)
+    # raw_latex_template_string = r""" \documentclass{article} ... \VAR{your_data | e} ... \end{document} """
+    # rendered_latex = render_latex_from_string_template(raw_latex_template_string, report_data)
+
+    if not rendered_latex:
+        print("Failed to render LaTeX template.")
+        return
+    print("\n--- Rendered LaTeX ---")
+    # print(rendered_latex[:1000] + "...\n--------------------")
+
+
+    # --- 3. Compile the rendered LaTeX to PDF ---
+    print("\nStep 3: Compiling LaTeX to PDF...")
+    pdf_file_path = compile_latex_to_pdf(
+        latex_content=rendered_latex,
+        jobname=REPORT_JOBNAME,
+        output_dir=OUTPUT_DIR,
+        use_latexmk=True, # Recommended
+        latex_engine="pdflatex", # latexmk will use this engine
+        assets_paths=None, # Pass paths to images, etc.
+        keep_tex_file=KEEP_TEX
+    )
+
+    if pdf_file_path:
+        print(f"\nReport generation successful! PDF saved to: {pdf_file_path}")
+    else:
+        print("\nReport generation failed.")
+    
+    return pdf_file_path
+
+# For demo
+if __name__ == "__main__":
+    run_generate_report(report_data)

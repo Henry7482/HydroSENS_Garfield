@@ -1,0 +1,61 @@
+{
+    "message": "Hydrosens run completed successfully",
+    "outputs": {
+        "2024-12-23": {
+            "curve-number": 70.89308553051583,
+            "ndvi": 0.3311726052982869,
+            "precipitation": 1.1920928955078125e-10,
+            "soil-fraction": 0.026419354124047587,
+            "temperature": 29.295709228515648,
+            "vegetation-fraction": 0.8305334428763211
+        },
+        "2025-01-02": {
+            "curve-number": 65.86901523912354,
+            "ndvi": 0.4257457384621265,
+            "precipitation": 1.1920928955078125e-10,
+            "soil-fraction": 0.13903182820553625,
+            "temperature": 29.295709228515648,
+            "vegetation-fraction": 0.8609681717944638
+        },
+        "2025-01-07": {
+            "curve-number": 65.98525540338092,
+            "ndvi": 0.4150797399130213,
+            "precipitation": 1.1920928955078125e-10,
+            "soil-fraction": 0.1663068799497779,
+            "temperature": 29.295709228515648,
+            "vegetation-fraction": 0.8336931200502222
+        },
+        "2025-01-12": {
+            "curve-number": 78.69785637225098,
+            "ndvi": 0.2915896498347248,
+            "precipitation": 1.1920928955078125e-10,
+            "soil-fraction": 0.029631506666680928,
+            "temperature": 29.295709228515648,
+            "vegetation-fraction": 0.9236949533177709
+        },
+        "2025-01-17": {
+            "curve-number": 66.74481216482332,
+            "ndvi": 0.35783109319451545,
+            "precipitation": 1.1920928955078125e-10,
+            "soil-fraction": 0.07423941626975653,
+            "temperature": 29.295709228515648,
+            "vegetation-fraction": 0.9247911147526104
+        },
+        "2025-01-22": {
+            "curve-number": 70.05433968377068,
+            "ndvi": 0.35347229084993753,
+            "precipitation": 1.1920928955078125e-10,
+            "soil-fraction": 0.172756845036906,
+            "temperature": 29.295709228515648,
+            "vegetation-fraction": 0.8075661699964561
+        },
+        "2025-01-27": {
+            "curve-number": 71.94932288563587,
+            "ndvi": 0.34504334964796574,
+            "precipitation": 1.1920928955078125e-10,
+            "soil-fraction": 0.21028195963685203,
+            "temperature": 29.295709228515648,
+            "vegetation-fraction": 0.7823688578321615
+        }
+    }
+}
