@@ -11,12 +11,19 @@ def analyze():
     statistics = request.form.get("statistics", "").strip().lower()
     if statistics == HYDROSENS_STATISTICS:
         # 2. Forward multipart form-data to HydroSENS v1
-        shapefile = request.files.get("shapefile")
-        if not shapefile:
-            return jsonify({"error": "Shapefile is required"}), 400
+        shapefile_shp = request.files.get("shapefile_shp")
+        shapefile_shx = request.files.get("shapefile_shx")
+        shapefile_dbf = request.files.get("shapefile_dbf")
+        shapefile_prj = request.files.get("shapefile_prj")
+
+        if not shapefile_shp or not shapefile_shx or not shapefile_dbf or not shapefile_prj :
+            return jsonify({"error": "All shapefile components are required"}), 400
 
         files_payload = {
-            "shapefile": (shapefile.filename, shapefile.stream, shapefile.content_type)
+            "shapefile_shp": shapefile_shp,
+            "shapefile_shx": shapefile_shx,
+            "shapefile_dbf": shapefile_dbf,
+            "shapefile_prj": shapefile_prj,
         }
 
         data_payload = {
