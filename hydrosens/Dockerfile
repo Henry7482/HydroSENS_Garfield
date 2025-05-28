@@ -47,4 +47,5 @@ RUN touch /root/.cdsapirc && \
     echo "key: a9aa725d-6aeb-4b3e-b163-6466b4024a5f" >> /root/.cdsapirc
 
 # Run the main Python script
-CMD ["python", "app.py"]
+CMD ["flask", "--app", "app.py", "run", "--host=0.0.0.0", "--port=5000"]
+
