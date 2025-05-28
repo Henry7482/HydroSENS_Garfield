@@ -12,6 +12,15 @@ RUN apt-get update --fix-missing && \
         tk-dev \
     && apt-get clean && \
     rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y \
+    latexmk \
+    texlive-latex-extra \
+    texlive-fonts-recommended \
+    texlive-latex-recommended \
+    texlive-xetex \
+    texlive-science \
+    ghostscript \
+    && apt-get clean
 
 # Set environment variables for GDAL
 ENV CPLUS_INCLUDE_PATH=/usr/include/gdal

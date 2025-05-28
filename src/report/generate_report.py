@@ -1,23 +1,23 @@
 # generate_report.py
 import os
-from report_templating import render_latex_template
-from latex_utils import compile_latex_to_pdf
-from generate_content import generate_content
-from templates.mock_data import report_data
+from .report_templating import render_latex_template
+from .latex_utils import compile_latex_to_pdf
+from .generate_content import generate_content
+from .templates.mock_data import report_data
 
 
 def run_generate_report(metrics_data):
     # --- Configuration ---
-    TEMPLATE_DIR = "templates"
+    TEMPLATE_DIR = "/app/src/report/templates"  # Directory where the LaTeX template is stored
     TEMPLATE_FILENAME = "report_template.tex.j2" # Assumes file-based template
-    OUTPUT_DIR = "generated_reports"
+    OUTPUT_DIR = "./generated_reports"
     REPORT_JOBNAME = "RSS_Hydro_Region_Report_2025"
     KEEP_TEX = True # Set to False to delete the .tex file after compilation
 
     # --- 1. Get data for the Report ---
     print("Step 1: Generating content...")
-    # report_data = generate_content(metrics_data)
-    report_data = metrics_data # FOR DEMO ONLY
+    report_data = generate_content(metrics_data)
+    # report_data = metrics_data # FOR DEMO ONLY
 
     # --- 2. Render the LaTeX template ---
     print("Step 2: Rendering LaTeX template...")

@@ -10,5 +10,6 @@ services:
             - 8.8.4.4
         ports:
             - "5001:5001"
+
         env_file:
             - .env

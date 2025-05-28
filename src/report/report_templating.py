@@ -1,6 +1,6 @@
 import os
 from jinja2 import Environment, FileSystemLoader, select_autoescape
-from latex_utils import tex_escape # Import the escape function
+from .latex_utils import tex_escape # Import the escape function
 
 def render_latex_template(template_file_path, data, template_dir="templates"):
     """
