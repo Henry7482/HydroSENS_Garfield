@@ -8,7 +8,7 @@ from pydantic import BaseModel, ValidationError
 from google.api_core.exceptions import GoogleAPIError
 
 
-from .templates.mock_data import content_gen_input
+from data.templates.mock_data import content_gen_input
 
 load_dotenv()
 

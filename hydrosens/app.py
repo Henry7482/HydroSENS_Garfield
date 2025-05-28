@@ -1,6 +1,5 @@
 from flask import Flask, request, jsonify, send_file
 from utils.main_sentinel_update import run_hydrosens
-from  src.report.generate_report import run_generate_report
 import os
 
 app = Flask(__name__)
@@ -46,40 +45,5 @@ def run_hydrosens_endpoint():
         return jsonify({"error": str(e)}), 500
 
 
-@app.route('/generate-report', methods=['POST'])
-def generate_report():
-    try:
-        # Run report generation and get the output PDF path
-        pdf_file_path = run_generate_report(request.get_json())
-
-        # Send the file to the user
-        return send_file(
-            pdf_file_path,
-            as_attachment=True,
-            mimetype='application/pdf',
-            download_name='report.pdf'
-        )
-    except Exception as e:
-        app.logger.error(f"Report generation failed: {str(e)}")
-        return jsonify({"error": str(e)}), 500
-
-@app.route('/generate-report', methods=['POST'])
-def generate_report():
-    try:
-        # Run report generation and get the output PDF path
-        pdf_file_path = run_generate_report(request.get_json())
-
-        # Send the file to the user
-        return send_file(
-            pdf_file_path,
-            as_attachment=True,
-            mimetype='application/pdf',
-            download_name='report.pdf'
-        )
-    except Exception as e:
-        app.logger.error(f"Report generation failed: {str(e)}")
-        return jsonify({"error": str(e)}), 500
-
-
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5001)
+    app.run(host="0.0.0.0", port=5050)

@@ -3,12 +3,12 @@ import os
 from .report_templating import render_latex_template
 from .latex_utils import compile_latex_to_pdf
 from .generate_content import generate_content
-from .templates.mock_data import report_data
+from data.templates.mock_data import report_data
 
 
 def run_generate_report(metrics_data):
     # --- Configuration ---
-    TEMPLATE_DIR = "/app/src/report/templates"  # Directory where the LaTeX template is stored
+    TEMPLATE_DIR = "/app/data/templates"  # Directory where the LaTeX template is stored
     TEMPLATE_FILENAME = "report_template.tex.j2" # Assumes file-based template
     OUTPUT_DIR = "./generated_reports"
     REPORT_JOBNAME = "RSS_Hydro_Region_Report_2025"
@@ -57,7 +57,7 @@ def run_generate_report(metrics_data):
         print(f"\nReport generation successful! PDF saved to: {pdf_file_path}")
     else:
         print("\nReport generation failed.")
-    
+
     return pdf_file_path
 
 # For demo

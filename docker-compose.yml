@@ -18,7 +18,7 @@ services:
       context: ./api-app              # Your API is in current directory
     container_name: analyze
     volumes:
-      - ./data:/app/data
+      - ./api-app/data:/app/data
     environment:
       - PYTHONUNBUFFERED=1
       - HYDROSENS_URL=http://hydrosens:5000/hydrosens   # 👈 Very important
