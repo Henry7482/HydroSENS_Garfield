@@ -15,6 +15,18 @@ start_time = time.time()
 
 def run_hydrosens (main_folder, start_date, end_date, output_master, amc, p, shapefiles_path):
     """Run the Hydrosens workflow for a given date range and area of interest."""
+    # Clear all contents of the output_master directory
+    if os.path.exists(output_master):
+        for filename in os.listdir(output_master):
+            file_path = os.path.join(output_master, filename)
+            try:
+                if os.path.isfile(file_path) or os.path.islink(file_path):
+                    os.unlink(file_path)  # remove file or symlink
+                elif os.path.isdir(file_path):
+                    shutil.rmtree(file_path)  # remove directory
+            except Exception as e:
+                print(f'Failed to delete {file_path}. Reason: {e}')
+    
     shapefiles = [f for f in os.listdir(shapefiles_path) if f.endswith('.shp')] 
     for shapefile in shapefiles: 
         # Skip shapefiles that contain '_gcs' in their name 
@@ -29,6 +41,7 @@ def run_hydrosens (main_folder, start_date, end_date, output_master, amc, p, sha
 
 def process_dates(start_date, end_date, aoi, output_master, amc, p, shapefile_path):
     """Process Sentinel-2 images within a date range if imagery exists."""
+
     HSG250m = os.getenv("HSG250m")
     sli = os.getenv("SLI")
     dates_with_images = []
@@ -229,7 +242,7 @@ def process_dates(start_date, end_date, aoi, output_master, amc, p, shapefile_pa
                          yRes=MNDWI_res[1], outputType=gdal.GDT_Int16)
 
         del inputfile, output_raster, MNDWI, warp
-        os.remove(output + r"/extracted.tif")
+        # os.remove(output + r"/extracted.tif")
 
         # Fill NoData holes in the extracted data
         reference = gdal.Open(output + r"/HSG_match.tif")
@@ -262,8 +275,8 @@ def process_dates(start_date, end_date, aoi, output_master, amc, p, shapefile_pa
 
         extract_raster(output + r"/HSG_reclass.tif", output + r"/null_MNDWI.tif", output + r"/HSG_final.tif")
 
-        os.remove(output + r"/HSG_reclass.tif")
-        os.remove(output + r"/filled.tif")
+        # os.remove(output + r"/HSG_reclass.tif")
+        # os.remove(output + r"/filled.tif")
 
         ### Initial CN classification for vegetation and soil ###
 
@@ -293,7 +306,7 @@ def process_dates(start_date, end_date, aoi, output_master, amc, p, shapefile_pa
         masked = rasterio.open(output + r"/veghealth.tif")
         Extract(output + r"/veghealth.tif", shapefile_path, output + r"/Vegetation_Health.tif", nodata_value=255)
         masked = None
-        os.remove(output + r"/veghealth.tif")
+        # os.remove(output + r"/veghealth.tif")
 
         # Get files
         file2 = gdal.Open(output + r"/HSG_final.tif")
@@ -308,7 +321,7 @@ def process_dates(start_date, end_date, aoi, output_master, amc, p, shapefile_pa
         soil_reclass = classification(CN_table, array3, array2)
 
         file2 = None
-        os.remove(output + r"/HSG_final.tif")
+        # os.remove(output + r"/HSG_final.tif")
 
         # CCN calculation
         imp_CN = 98
@@ -360,11 +373,11 @@ def process_dates(start_date, end_date, aoi, output_master, amc, p, shapefile_pa
 
 
         del masked, mask, DEMfile
-        os.remove(output + r"/CCN_masked.tif")
-        os.remove(output + r"/null_MNDWI.tif")
-        os.remove(output + r"/HSG_match.tif")
-        os.remove(output + r"/DEM.tif")
-        os.remove(output+ r'/impervious.tif')
+        # os.remove(output + r"/CCN_masked.tif")
+        # os.remove(output + r"/null_MNDWI.tif")
+        # os.remove(output + r"/HSG_match.tif")
+        # os.remove(output + r"/DEM.tif")
+        # os.remove(output+ r'/impervious.tif')
 
         ### Runoff Calculation ###
 
@@ -420,7 +433,8 @@ def process_dates(start_date, end_date, aoi, output_master, amc, p, shapefile_pa
     df = df[
     (df[['veg_mean', 'soil_mean', 'curve_number', 'ndvi', 'temperature']] != 0).all(axis=1)
     ]
-    shapefile_name = os.path.splitext(shapefile_path)[0]
+    shapefile_name = os.path.splitext(os.path.basename(shapefile_path))[0]
+    print("Output master: ", output_master)
     output_csv = os.path.join(output_master, shapefile_name + '.csv')
 
     
@@ -435,16 +449,16 @@ def process_dates(start_date, end_date, aoi, output_master, amc, p, shapefile_pa
     for file in files:
         os.remove(file)
 
-    for date in dates_with_images:
-        date_folder = os.path.join(output_master, date.strftime('%Y-%m-%d'))
+    # for date in dates_with_images:
+    #     date_folder = os.path.join(output_master, date.strftime('%Y-%m-%d'))
 
-        if os.path.isdir(date_folder):
-            try:
-                os.chmod(date_folder, 0o777)  # Ensure permissions allow deletion
-                shutil.rmtree(date_folder)
-                print(f"Deleted folder: {date_folder}")
-            except Exception as e:
-                print(f"Failed to delete {date_folder}: {e}")
+    #     if os.path.isdir(date_folder):
+    #         try:
+    #             os.chmod(date_folder, 0o777)  # Ensure permissions allow deletion
+    #             shutil.rmtree(date_folder)
+    #             print(f"Deleted folder: {date_folder}")
+    #         except Exception as e:
+    #             print(f"Failed to delete {date_folder}: {e}")
     return formatted_data
 
 
