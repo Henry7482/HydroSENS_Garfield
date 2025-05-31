@@ -12,6 +12,15 @@ RUN apt-get update --fix-missing && \
         tk-dev \
     && apt-get clean && \
     rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y \
+    latexmk \
+    texlive-latex-extra \
+    texlive-fonts-recommended \
+    texlive-latex-recommended \
+    texlive-xetex \
+    texlive-science \
+    ghostscript \
+    && apt-get clean
 
 # Set environment variables for GDAL
 ENV CPLUS_INCLUDE_PATH=/usr/include/gdal
@@ -38,4 +47,5 @@ RUN touch /root/.cdsapirc && \
     echo "key: a9aa725d-6aeb-4b3e-b163-6466b4024a5f" >> /root/.cdsapirc
 
 # Run the main Python script
-CMD ["python", "app.py"]
+CMD ["flask", "--app", "app.py", "run", "--host=0.0.0.0", "--port=5000"]
+

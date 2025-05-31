@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, send_file
 from utils.main_sentinel_update import run_hydrosens
 import os
 
@@ -46,4 +46,4 @@ def run_hydrosens_endpoint():
 
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000)
+    app.run(host="0.0.0.0", port=5050)
