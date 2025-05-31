@@ -1,6 +1,7 @@
 from flask import Flask, request, jsonify, send_file
 from utils.main_sentinel_update import run_hydrosens
 import os
+import base64
 
 app = Flask(__name__)
 
@@ -44,6 +45,35 @@ def run_hydrosens_endpoint():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+
+@app.route('/export-latest-tifs', methods=['GET'])
+def export_tifs_content():
+    output_master = "/app/data/output"
+    tif_by_date = {}
+
+    if not os.path.exists(output_master):
+        return jsonify({"error": "Output folder does not exist"}), 404
+
+    for date_folder in os.listdir(output_master):
+        date_path = os.path.join(output_master, date_folder)
+        if os.path.isdir(date_path):
+            date_tifs = {}
+            for f in os.listdir(date_path):
+                if f.endswith('.tif'):
+                    file_path = os.path.join(date_path, f)
+                    try:
+                        with open(file_path, 'rb') as file:
+                            encoded = base64.b64encode(file.read()).decode('utf-8')
+                            date_tifs[f] = encoded
+                    except Exception as e:
+                        date_tifs[f] = f"Error reading file: {str(e)}"
+            if date_tifs:
+                tif_by_date[date_folder] = date_tifs
+
+    return jsonify({
+        "message": "Exported .tif file contents as base64",
+        "tif_files": tif_by_date
+    }), 200
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5050)

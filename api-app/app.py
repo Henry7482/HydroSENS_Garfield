@@ -36,7 +36,7 @@ def analyze():
 
         try:
             # Get the HydroSENS URL
-            hydrosens_url = os.getenv("HYDROSENS_URL")
+            hydrosens_url = os.getenv("HYDROSENS_URL") + "/hydrosens"
             if not hydrosens_url:
                 return jsonify({"error": "HYDROSENS_URL environment variable is not set"}), 500
             response = requests.post(hydrosens_url, files=files_payload, data=data_payload)
@@ -63,6 +63,25 @@ def generate_report():
     except Exception as e:
         app.logger.error(f"Report generation failed: {str(e)}")
         return jsonify({"error": str(e)}), 500
+
+@app.route('/latest-tifs', methods=['GET'])
+def latest_tifs():
+    # 1. Check required fields
+    statistics = request.form.get("statistics", "").strip().lower()
+    if statistics == HYDROSENS_STATISTICS:
+        try:
+            # Get the HydroSENS URL
+            hydrosens_url = os.getenv("HYDROSENS_URL") + "/export-latest-tifs"
+            if not hydrosens_url:
+                return jsonify({"error": "HYDROSENS_URL environment variable is not set"}), 500
+            response = requests.get(hydrosens_url)
+            if response.status_code != 200:
+                return jsonify({"error": "Failed to fetch latest .tif files"}), response.status_code
+            return jsonify(response.json()), response.status_code
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
+    else:
+        return jsonify({"error": "Invalid statistics parameter"}), 400
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000)

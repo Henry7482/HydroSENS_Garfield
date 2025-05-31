@@ -21,7 +21,7 @@ services:
       - ./api-app/data:/app/data
     environment:
       - PYTHONUNBUFFERED=1
-      - HYDROSENS_URL=http://hydrosens:5000/hydrosens   # 👈 Very important
+      - HYDROSENS_URL=http://hydrosens:5000   # 👈 Very important
     dns:
       - 8.8.8.8
       - 8.8.4.4
