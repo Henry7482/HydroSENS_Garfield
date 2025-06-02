@@ -38,7 +38,6 @@ def CDS_temp(date, output):
         "daily_statistic": "daily_mean",
         "time_zone": "utc+00:00",
         "frequency": "6_hourly",
-         "area": [10.5, -0.5, 5, 2] # country of Togo
     }
 
     client = cdsapi.Client()
@@ -96,7 +95,6 @@ def CDS_precip(date, output):
         "daily_statistic": "daily_mean",
         "time_zone": "utc+00:00",
         "frequency": "6_hourly",
-        "area": [10.5, -0.5, 5, 2] # country of Togo
     }
 
 
