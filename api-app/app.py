@@ -19,6 +19,10 @@ import os
 from werkzeug.datastructures import FileStorage
 from io import BytesIO
 
+from utils.coor_convert import lon_to_utm_zone, build_utm_wkt
+from pyproj import Transformer
+
+
 @app.route("/analyze", methods=["POST"])
 def analyze():
     statistics = request.form.get("statistics", "").strip().lower()
@@ -180,6 +184,43 @@ def latest_tifs():
             return jsonify({"error": str(e)}), 500
     else:
         return jsonify({"error": "Invalid statistics parameter"}), 400
+
+@app.route('/convert', methods=['POST'])
+def convert_coordinates():
+    data = request.get_json()
+    
+    coordinates = data.get("coordinates")
+    if not isinstance(coordinates, list) or not all(isinstance(p, list) and len(p) == 2 for p in coordinates):
+        return jsonify(error="Request must include a 'coordinates' field with an array of [lat, lon] pairs."), 400
+
+    results = []
+    for lat, lon in coordinates:
+        try:
+            zone = lon_to_utm_zone(lon)
+            is_northern = lat >= 0
+            epsg_code = 32600 + zone if is_northern else 32700 + zone
+            transformer = Transformer.from_crs("EPSG:4326", f"EPSG:{epsg_code}", always_xy=True)
+            x, y = transformer.transform(lon, lat)
+            wkt = build_utm_wkt(zone, is_northern)
+
+            results.append({
+                "input": {"lat": lat, "lon": lon},
+                "utm": {
+                    "zone": zone,
+                    "epsg": epsg_code,
+                    "x": round(x, 3),
+                    "y": round(y, 3),
+                    "wkt": wkt
+                }
+            })
+        except Exception as e:
+            results.append({
+                "input": {"lat": lat, "lon": lon},
+                "error": f"Projection failed: {str(e)}"
+            })
+
+    return jsonify(results)
+
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000)
