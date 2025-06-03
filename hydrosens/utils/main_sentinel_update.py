@@ -211,15 +211,39 @@ def process_dates(start_date, end_date, aoi, output_master, amc, p, coordinates,
         ### Global Soil Dataset Processing ###
 
         # Create buffered coordinates for soil dataset extraction
-        buffered_coords, buffered_crs = Create_buffer(coordinates, crs)
+        try:
+            buffered_coords, buffered_crs = Create_buffer(coordinates, crs)
+            print(f"Created buffer with {len(buffered_coords)} coordinates")
+        except Exception as e:
+            print(f"Error creating buffer: {e}")
+            raise
 
         # Matching global dataset projection to buffered coordinates for extraction
-        HSG250m_open = gdal.Open(HSG250m)
-        soil_crs = HSG250m_open.GetProjection()
+        try:
+            HSG250m_open = gdal.Open(HSG250m)
+            if HSG250m_open is None:
+                raise ValueError(f"Could not open HSG dataset: {HSG250m}")
+            soil_crs = HSG250m_open.GetProjection()
+            print(f"HSG dataset CRS: {soil_crs}")
+        except Exception as e:
+            print(f"Error accessing HSG dataset: {e}")
+            raise
 
         # Extract study area from global dataset using buffered coordinates
-        HSGraster = rasterio.open(HSG250m)
-        initialExtract = Extract(HSG250m, buffered_coords, buffered_crs, output + r"/extracted.tif", nodata_value=255)
+        try:
+            print(f"Extracting from HSG dataset using buffered coordinates...")
+            Extract(HSG250m, buffered_coords, buffered_crs, output + r"/extracted.tif", nodata_value=255)
+            print("HSG extraction completed successfully")
+        except Exception as e:
+            print(f"Error in HSG extraction: {e}")
+            # Try with original coordinates if buffered extraction fails
+            try:
+                print("Retrying with original coordinates...")
+                Extract(HSG250m, coordinates, crs, output + r"/extracted.tif", nodata_value=255)
+                print("HSG extraction with original coordinates completed")
+            except Exception as e2:
+                print(f"Error in HSG extraction retry: {e2}")
+                raise
 
         # Reproject extracted raster to match MNDWI
         MNDWI = gdal.Open(output + r"/null_MNDWI.tif")
@@ -289,7 +313,12 @@ def process_dates(start_date, end_date, aoi, output_master, amc, p, coordinates,
         CreateInt(array1, NDVI, "veghealth", output)
         
         # Extract using coordinates instead of shapefile
-        Extract(output + r"/veghealth.tif", coordinates, crs, output + r"/Vegetation_Health.tif", nodata_value=255)
+        try:
+            Extract(output + r"/veghealth.tif", coordinates, crs, output + r"/Vegetation_Health.tif", nodata_value=255)
+            print("Vegetation health extraction completed")
+        except Exception as e:
+            print(f"Error in vegetation health extraction: {e}")
+            raise
 
         # Get files
         file2 = gdal.Open(output + r"/HSG_final.tif")
@@ -351,7 +380,12 @@ def process_dates(start_date, end_date, aoi, output_master, amc, p, coordinates,
         CreateInt(CCN_arr_final, DEMfile, "CCN_masked", output)
         
         # Extract using coordinates instead of shapefile
-        Extract(output + r"/CCN_masked.tif", coordinates, crs, output + f"/CCN_final.tif", nodata_value=255)
+        try:
+            Extract(output + r"/CCN_masked.tif", coordinates, crs, output + f"/CCN_final.tif", nodata_value=255)
+            print("CCN final extraction completed")
+        except Exception as e:
+            print(f"Error in CCN final extraction: {e}")
+            raise
 
         del mask, DEMfile
 

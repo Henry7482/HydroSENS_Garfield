@@ -1,28 +1,41 @@
-import ee
-import ee.mapclient
-import geemap
-import os
+import osgeo
+from osgeo import gdal, osr, ogr
+osgeo.gdal.UseExceptions()
+import rasterio
+from rasterio.mask import mask
+import numpy as np
+import scipy
+import geopandas as gpd
 import pandas as pd
+import csv
+from numpy import ndarray
+import timeit
+import rioxarray
+import warnings
+warnings.filterwarnings("ignore", category=UserWarning)
+import xarray as xr
+from mesma.core import mesma, shade_normalisation
+from scipy.interpolate import griddata
+import netCDF4 as nc
+import geemap
+from datetime import datetime
+import cdsapi
+from shapely.geometry import Polygon
 
-service_account = 'khoabui@hydrosens-garfield.iam.gserviceaccount.com'
-credentials = ee.ServiceAccountCredentials(service_account, r"./.secret/hydrosens-garfield-f6fe24f0d188.json")
-ee.Initialize(credentials)
-
-
-def coordinates_to_ee_geometry(coordinates):
+def coordinates_to_polygon(coordinates):
     """
-    Convert coordinate array to Earth Engine Geometry
+    Convert coordinate array to Shapely Polygon
     
     Parameters:
         coordinates: List of [lon, lat] pairs defining the polygon boundary
     Returns:
-        ee.Geometry.Polygon
+        shapely.geometry.Polygon
     """
     # Ensure the polygon is closed (first and last coordinates are the same)
     if coordinates[0] != coordinates[-1]:
         coordinates = coordinates + [coordinates[0]]
     
-    return ee.Geometry.Polygon([coordinates])
+    return Polygon(coordinates)
 
 
 def get_centroid_from_coordinates(coordinates):
@@ -34,275 +47,617 @@ def get_centroid_from_coordinates(coordinates):
     Returns:
         tuple: (centroid_lon, centroid_lat)
     """
-    import numpy as np
-    lons = [coord[0] for coord in coordinates]
-    lats = [coord[1] for coord in coordinates]
-    return np.mean(lons), np.mean(lats)
+    polygon = coordinates_to_polygon(coordinates)
+    centroid = polygon.centroid
+    return centroid.x, centroid.y
 
 
-def get_ERA5_temp(aoi, start_date, end_date):
-    era5_collection = ee.ImageCollection('ECMWF/ERA5/DAILY') \
-        .filterBounds(aoi) \
-        .filterDate(start_date, end_date) \
-        .select('mean_2m_air_temperature') \
-        .map(lambda img: img.subtract(273.15).rename('mean_2m_air_temperature_C'))
-
-    def sample_temperature(img):
-        sampled_point = img.reduceRegion(
-            reducer=ee.Reducer.mean(),
-            geometry=aoi,
-            scale=1000,
-            maxPixels=1e9
-        )
-        return ee.Feature(None, {
-            'date': img.date().format('YYYY-MM-dd'),
-            'temperature_C': sampled_point.get('mean_2m_air_temperature_C')
-        })
-
-    temperature_fc = ee.FeatureCollection(era5_collection.map(sample_temperature))
-    temp_dict = temperature_fc.getInfo()
-    data = [{'date': f['properties']['date'], 'temperature_C': f['properties']['temperature_C']}
-            for f in temp_dict['features']]
-
-    df = pd.DataFrame(data)
-    df['date'] = pd.to_datetime(df['date'])
-
-    return df
+def CDS_temp(date, output):
 
 
-def get_ERA5_precip(aoi, start_date, end_date):
-    era5_collection = ee.ImageCollection('ECMWF/ERA5/DAILY') \
-        .filterBounds(aoi) \
-        .filterDate(start_date, end_date) \
-        .select('total_precipitation')
+    year = str(date.year)
+    month = str(date.month).zfill(2)
+    day = str(date.day).zfill(2)
 
-    # Sample the precipitation at the AOI for each image and create a FeatureCollection
-    def sample_precipitation(img):
-        sampled_point = img.reduceRegion(
-            reducer=ee.Reducer.mean(),
-            geometry=aoi,
-            scale=1000,
-            maxPixels=1e9
-        )
-        return ee.Feature(None, {
-            'date': img.date().format('YYYY-MM-dd'),
-            'total_precipitation_m': sampled_point.get('total_precipitation')
-        })
 
-    # Apply sampling and convert the results to a FeatureCollection
-    precipitation_fc = ee.FeatureCollection(era5_collection.map(sample_precipitation))
+    dataset = "derived-era5-land-daily-statistics"
+    request = {
+        "variable": ["2m_temperature"],
+        "year": year,
+        "month": month,
+        "day": day,
+        "daily_statistic": "daily_mean",
+        "time_zone": "utc+00:00",
+        "frequency": "6_hourly",
+    }
 
-    # Convert FeatureCollection to a list of dictionaries and then to a DataFrame
-    precip_dict = precipitation_fc.getInfo()  # Fetch the data as a dictionary
-    data = [{'date': f['properties']['date'], 'total_precipitation_m': f['properties']['total_precipitation_m']}
-            for f in precip_dict['features']]
+    client = cdsapi.Client()
+    target = output + f"/temp_{year}_{month}_{day}.nc"
+    client.retrieve(dataset, request, target)
+    return target
 
-    # Convert list of dictionaries to a pandas DataFrame
-    df = pd.DataFrame(data)
-    df['date'] = pd.to_datetime(df['date'])  # Ensure date column is in datetime format
+
+def extract_data(nc_file_path):
+    with nc.Dataset(nc_file_path, mode='r') as nc_file:
+
+        lat = nc_file.variables['latitude'][:]
+        long = nc_file.variables['longitude'][:]
+        temp = nc_file.variables['t2m'][0, :, :]
+
+        lon_grid, lat_grid = np.meshgrid(long, lat)
+
+        lat_flat = lat_grid.flatten()
+        long_flat = lon_grid.flatten()
+        temp_flat = temp.flatten()
+
+        df = pd.DataFrame({'Latitude': lat_flat, 'Longitude': long_flat, 'Temperature': temp_flat})
 
     return df
 
-
-def get_sentinel2_dates(aoi, start_date, end_date, max_cloud_coverage=30):
-
-    sentinel2 = ee.ImageCollection('COPERNICUS/S2_SR_HARMONIZED') \
-                .filterBounds(aoi) \
-                .filterDate(start_date, end_date) \
-                .filter(ee.Filter.lte('CLOUDY_PIXEL_PERCENTAGE', max_cloud_coverage))
-
-    dates = sentinel2.aggregate_array('system:time_start').getInfo()
-
-    date_list = [ee.Date(date).format('YYYY-MM-DD').getInfo() for date in dates]
-
-    return date_list
-
-
-def load_Sentinel2(aoi, StartDate, EndDate):
+def get_temp(coordinates, df):
     """
-    load_Sentinel2
-        This function is used to obtain a collection of Sentinel 2 images that
-        meet a specific criteria (e.g., cloud coverage <10%, date range). The images are sorted
-        by cloud coverage in descending order, so that the first image selected in the mosaic function
-        has the least cloud coverage.
-    input:
-        aoi: The area of interest (ee.Geometry)
-        StartDate: The start date of the satellite images
-        EndDate: The end date of the satellite images;
-    output:
-        filtered_col: a collection of filtered images that meet the criteria
-
-    """
+    Get temperature for coordinate-based AOI
     
-    filtered_col1 = ee.ImageCollection('COPERNICUS/S2_SR_HARMONIZED')\
-        .filterDate(StartDate,EndDate)\
-        .filterBounds(aoi) \
-        .filterMetadata('CLOUDY_PIXEL_PERCENTAGE','less_than', 35)\
-        .sort('CLOUDY_PIXEL_PERCENTAGE')\
-        .select('B2', 'B3', 'B4', 'B7', 'B8', 'B8A', 'B11', 'B12')
-    num_images = filtered_col1.size().getInfo()
-    first_img = filtered_col1.first()
-
-
-    return first_img, num_images
-
-def load_Landsat(aoi, StartDate, EndDate):
-    filtered_col1 = ee.ImageCollection('LANDSAT/LC08/C02/T1_L2')\
-        .filterDate(StartDate,EndDate)\
-        .filterBounds(aoi) \
-        .filterMetadata('CLOUD_COVER','less_than', 30)\
-        .sort('CLOUD_COVER')\
-        .select('SR_B2', 'SR_B3', 'SR_B4', 'SR_B5', 'SR_B6', 'SR_B7')
-    num_images = filtered_col1.size().getInfo()
-    first_img = filtered_col1.first()
-
-    return first_img, num_images
-
-def mosaic(filtered_col):
+    Parameters:
+        coordinates: List of [lon, lat] pairs defining the polygon boundary
+        df: DataFrame with temperature data
+    Returns:
+        float: Temperature value in Celsius
     """
-    mosaic
-        This function is used to mosaic images, should multiple encompass the aoi.
-        The first image in the collection will be selected/mosaicked
-    input:
-        filtered_col: product of load_Sentinel2 function
-    output:
-        mosaic: first image in filtered_col, mosaicked if necessary
+    centroid_long, centroid_lat = get_centroid_from_coordinates(coordinates)
 
+    df['distance'] = np.sqrt((df['Latitude'] - centroid_lat)**2 + (df['Longitude'] - centroid_long)**2)
+    closest_row = df.loc[df['distance'].idxmin()]
+    temp = closest_row['Temperature']
+    temp = np.subtract(temp,273.15)
+    return temp
+
+
+def CDS_precip(date, output):
+
+
+    year = str(date.year)
+    month = str(date.month).zfill(2)
+    day = str(date.day).zfill(2)
+
+    dataset = "derived-era5-single-levels-daily-statistics"
+    request = {
+        "product_type": "reanalysis",
+        "variable": ["total_precipitation"],
+        "year": year,
+        "month": month,
+        "day": day,
+        "daily_statistic": "daily_mean",
+        "time_zone": "utc+00:00",
+        "frequency": "6_hourly",
+    }
+
+
+    client = cdsapi.Client()
+    target = output + f"/precip_{year}_{month}_{day}.nc"
+    client.retrieve(dataset, request, target)
+    return target
+
+def extract_p_data(nc_file_path):
+    with nc.Dataset(nc_file_path, mode='r') as nc_file:
+        lat = nc_file.variables['latitude'][:]
+        long = nc_file.variables['longitude'][:]
+
+        if 'tp' in nc_file.variables:
+            tp_var = nc_file.variables['tp']
+            shape = tp_var.shape
+
+            if len(shape) == 3 and shape[0] > 0:
+                temp = tp_var[0, :, :]
+            elif len(shape) == 2:
+                temp = tp_var[:, :]
+            else:
+                temp = np.zeros((len(lat), len(long)))
+        else:
+            temp = np.zeros((len(lat), len(long)))
+
+        lon_grid, lat_grid = np.meshgrid(long, lat)
+
+        lat_flat = lat_grid.flatten()
+        long_flat = lon_grid.flatten()
+        temp_flat = temp.flatten()
+
+        df = pd.DataFrame({'Latitude': lat_flat, 'Longitude': long_flat, 'Precipitation': temp_flat})
+
+    return df
+
+def get_p(coordinates, df):
     """
-    mosaic_col = filtered_col.mosaic()
-    mosaic = mosaic_col.first()
-    return mosaic
-
-
-def resampling(image, crs_string):
+    Get precipitation for coordinate-based AOI
+    
+    Parameters:
+        coordinates: List of [lon, lat] pairs defining the polygon boundary
+        df: DataFrame with precipitation data
+    Returns:
+        float: Precipitation value
     """
-    resampling
-        This function is used to resample bands 8A, 11, and 12 to the 10m resolution of bands
-        2, 3, and 4 using bilinear reasmpling.
-    input:
-        image: product of mosaic function
-        crs_string: CRS string for projection
-    output:
-        resample: image with resampled bands
+    centroid_long, centroid_lat = get_centroid_from_coordinates(coordinates)
 
+    df['distance'] = np.sqrt((df['Latitude'] - centroid_lat)**2 + (df['Longitude'] - centroid_long)**2)
+    closest_row = df.loc[df['distance'].idxmin()]
+    p = closest_row['Precipitation']
+    p = np.divide(p,1000)
+    return p
+
+def CreateInt(array, reference, array_name, output):
     """
-    bands = image.select('B2', 'B3', 'B4', 'B7', 'B8', 'B8A', 'B11', 'B12')
-    resample = bands.resample('bilinear').reproject(crs=crs_string, scale=10)
-    return resample
-
-
-def getDEM(aoi):
-    """
-    getDEM
-        This function is used to obtain the elevation data from FABDEM, the
-        Forest And Buildings removed Copernicus 30m DEM in the area of interest.
-    input:
-            aoi: the area of interest (ee.Geometry)
-    output:
-        DEM:  FABDEM image with the elevation data
-
-    """
-    DEM = ee.ImageCollection("projects/sat-io/open-datasets/FABDEM")\
-        .filterBounds(aoi)\
-        .mosaic()\
-        .rename('elevation')
-    return DEM
-
-
-def Bandsexport(image, crs_string, output, aoi):
-    """
-    Bandsexport
-        This function is used to export the resampled Sentinel 2 images to a geotiff file.
-        The output geotiff matches the aoi projection and bounds.
-    input:
-        image: image with bands 2,3,4,8A,11, and 12
-        crs_string: CRS string for projection
-        output: output folder
-        aoi: the area of interest (ee.Geometry)
-    output:
-        Bands.tif in the user-designated output folder
-
-    """
-    output_file = os.path.join(output, "Bands.tif")
-
-    band_names = ['B2', 'B3', 'B4', 'B7', 'B8', 'B8A', 'B11', 'B12']
-
-    final_selected = image.select(band_names, band_names).float()
-
-    geemap.ee_export_image(final_selected, output_file, scale=10, region=aoi,
-                           crs=crs_string)
-    return Bandsexport
-
-
-def DEMexport(image, crs_string, output, aoi):
-    """
-    DEMexport
-        This function is used to export the elevation data of the FABDEM to a geotiff file.
-        The output geotiff matches the aoi projection and bounds, along with a 10 m
-        spatial resolution.
-    input:
-        image:image with FABDEM elevation data
-        crs_string: CRS string for projection
-        output: output folder
-        aoi: the area of interest (ee.Geometry)
-    output:
-        DEM.tif in the user-designated output folder
+    CreateInt
+        This function is used to create an integer geotiff from a numpy array.
+    Parameters:
+        array:  a numpy array of the image
+        reference: another geotiff that will serve as a reference for the new image
+        array_name: a string that will be used to name the output image
+        output: path to output file
+    Returns:
+        None
 
     """
-    output_file = os.path.join(output, "DEM.tif")
+    output_filename = output + "/" + array_name + ".tif"
+    output_raster = gdal.GetDriverByName("GTiff").Create(output_filename, reference.RasterXSize,
+                                                         reference.RasterYSize, 1, gdal.GDT_Int32)
+    array_int = array.astype(np.int32)
+    output_raster.SetProjection(reference.GetProjection())
+    output_raster.SetGeoTransform(reference.GetGeoTransform())
+    output_raster.GetRasterBand(1).WriteArray(array_int)
 
-    band_names = ['elevation']
 
-    final_selected = image.select(band_names, band_names)
 
-    geemap.ee_export_image(final_selected, output_file, scale=10, region=aoi,
-                           crs=crs_string)
-    return DEMexport
 
-def Bandsexport_Landsat(image, crs_string, output, aoi):
+def CreateFloat(array, reference, array_name, output):
     """
-    Bandsexport
-        This function is used to export the Landsat 8 images to a geotiff file.
-        The output geotiff matches the aoi projection and bounds.
-    input:
-        image: image with bands 2,3,4,5, 6, and 7
-        crs_string: CRS string for projection
-        output: output folder
-        aoi: the area of interest (ee.Geometry)
-    output:
-        Bands.tif in the user-designated output folder
-
-    """
-    output_file = os.path.join(output, "Bands.tif")
-
-    band_names = ['SR_B2', 'SR_B3', 'SR_B4', 'SR_B5', 'SR_B6', 'SR_B7']
-
-    final_selected = image.select(band_names, band_names).float()
-
-    geemap.ee_export_image(final_selected, output_file, scale=30, region=aoi,
-                           crs=crs_string)
-
-def DEMexport_Landsat(image, crs_string, output, aoi):
-    """
-    DEMexport
-        This function is used to export the elevation data of the FABDEM to a geotiff file.
-        The output geotiff matches the aoi projection and bounds, along with a 10 m
-        spatial resolution.
-    input:
-        image:image with FABDEM elevation data
-        crs_string: CRS string for projection
-        output: output folder
-        aoi: the area of interest (ee.Geometry)
-    output:
-        DEM.tif in the user-designated output folder
+    CreateFLoat
+        This function is used to create a float geotiff from a numpy array.
+    Parameters:
+        array:  a numpy array of the image
+        reference: another geotiff that will serve as a reference for the new image
+        array_name: a string that will be used to name the output image
+        output: path to output file
+    Returns:
+        None
 
     """
-    output_file = os.path.join(output, "DEM.tif")
+    output_filename = output + "/" + array_name + ".tif"
+    output_raster = gdal.GetDriverByName("GTiff").Create(output_filename, reference.RasterXSize,
+                                                         reference.RasterYSize, 1, gdal.GDT_Float64)
+    output_raster.SetProjection(reference.GetProjection())
+    output_raster.SetGeoTransform(reference.GetGeoTransform())
+    output_raster.GetRasterBand(1).WriteArray(array)
 
-    band_names = ['elevation']
 
-    final_selected = image.select(band_names, band_names)
 
-    geemap.ee_export_image(final_selected, output_file, scale=30, region=aoi,
-                           crs=crs_string)
-    return DEMexport
+def Extract(raster_path, coordinates, crs, output_path, nodata_value = -9999):
+    """
+    Extract
+        Extracts a raster based on coordinate-defined polygon.
+
+    Parameters:
+        raster_path: Path to the input raster file.
+        coordinates: List of [lon, lat] pairs defining the polygon boundary
+        crs: CRS of the coordinates (string format like 'EPSG:4326')
+        output_path: Path to the output extracted raster file.
+        nodata_value : The value to be used for the nodata area
+
+    Returns:
+        None
+    """
+    try:
+        with rasterio.open(raster_path) as src:
+            # Create polygon from coordinates
+            polygon = coordinates_to_polygon(coordinates)
+            
+            # Create a temporary GeoDataFrame with the polygon
+            # Handle CRS string format
+            if isinstance(crs, str):
+                if crs.startswith('EPSG:'):
+                    crs_code = crs
+                else:
+                    crs_code = f'EPSG:{crs}'
+            else:
+                crs_code = crs
+                
+            gdf = gpd.GeoDataFrame([1], geometry=[polygon], crs=crs_code)
+            
+            # Transform to raster CRS if needed
+            if gdf.crs != src.crs:
+                gdf = gdf.to_crs(src.crs)
+            
+            geometry = gdf.geometry.values[0]
+            out_image, out_transform = mask(src, shapes=[geometry], crop=True)
+
+            out_meta = src.meta.copy()
+            out_meta.update({
+                "height": out_image.shape[1],
+                "width": out_image.shape[2],
+                "transform": out_transform
+            })
+
+            if nodata_value is not None:
+                out_meta.update({"nodata": nodata_value})
+                out_image[out_image == 0] = nodata_value
+
+            with rasterio.open(output_path, "w", **out_meta) as dest:
+                dest.write(out_image)
+                
+    except Exception as e:
+        print(f"Error in Extract function: {e}")
+        raise
+
+def Create_buffer(coordinates, crs, buffer_distance=250):
+    """"
+    Create_buffer
+        This function is used create a buffer around the original coordinates. The soil dataset raster is coarse and
+        providing a buffered polygon ensures that no information is lost as the raster is clipped to the study area.
+    Parameters:
+        coordinates: List of [lon, lat] pairs defining the polygon boundary
+        crs: CRS of the coordinates (string format like 'EPSG:4326')
+        buffer_distance: Buffer distance in meters (default 250m)
+    Returns:
+        List of buffered coordinates and CRS info for further processing
+
+    """
+    try:
+        # Create polygon from coordinates
+        polygon = coordinates_to_polygon(coordinates)
+        
+        # Handle CRS string format
+        if isinstance(crs, str):
+            if crs.startswith('EPSG:'):
+                crs_code = crs
+            else:
+                crs_code = f'EPSG:{crs}'
+        else:
+            crs_code = crs
+        
+        # Create GeoDataFrame
+        gdf = gpd.GeoDataFrame([1], geometry=[polygon], crs=crs_code)
+        
+        # For geographic CRS (degrees), convert to a projected CRS for accurate buffering
+        if gdf.crs.is_geographic:
+            # Get the center of the polygon to determine appropriate UTM zone
+            centroid = polygon.centroid
+            lon, lat = centroid.x, centroid.y
+            
+            # Determine UTM zone (simplified)
+            utm_zone = int((lon + 180) / 6) + 1
+            if lat >= 0:
+                utm_crs = f'EPSG:{32600 + utm_zone}'  # Northern hemisphere
+            else:
+                utm_crs = f'EPSG:{32700 + utm_zone}'  # Southern hemisphere
+            
+            # Transform to UTM for buffering
+            gdf_utm = gdf.to_crs(utm_crs)
+            buffered_gdf_utm = gdf_utm.copy()
+            buffered_gdf_utm.geometry = gdf_utm.geometry.buffer(buffer_distance)
+            
+            # Transform back to original CRS
+            buffered_gdf = buffered_gdf_utm.to_crs(crs_code)
+        else:
+            # Already in projected CRS, buffer directly
+            buffered_gdf = gdf.copy()
+            buffered_gdf.geometry = gdf.geometry.buffer(buffer_distance)
+        
+        # Extract buffered coordinates
+        buffered_polygon = buffered_gdf.geometry.values[0]
+        buffered_coords = list(buffered_polygon.exterior.coords)
+        
+        return buffered_coords, buffered_gdf.crs
+        
+    except Exception as e:
+        print(f"Error in Create_buffer: {e}")
+        print(f"Falling back to original coordinates without buffering")
+        return coordinates, crs
+
+
+def extract_raster(source, reference, output):
+    """
+    extract_raster
+        This function is used extract a raster based on the dimensions of another raster.
+    Parameters:
+        source: raster to be clipped
+        reference: raster that source will be clipped to
+        output: output path (output + r"\desired_name.tif"
+    Returns:
+        None
+    """
+    with rasterio.open(source) as src:
+        source_data = src.read()
+        source_meta = src.meta.copy()
+    with rasterio.open(reference) as ref:
+        source_meta.update({
+            'height': ref.height,
+            'width': ref.width
+        })
+        with rasterio.open(output, 'w', **source_meta) as dst:
+            dst.write(source_data)
+
+def Fill(data):
+    """
+    Fill
+        This function is used to fill nodata portions of the raster
+        with information from the nearest neighbors. This is used with the global soil dataset, as the coarse nature
+        of the raster causes areas of land surrounding water bodies are also being incorrectly labeled as nodata.
+        This way, all of the possible land is accounted for.
+    Parameters:
+        data: geotiff read using matplotlib.pyplot
+    Returns:
+        Filled array
+
+    """
+    # create a boolean mask that identifies locations in array with valid data and creates mask
+    mask = ~((data[:, :, 0] == 255) & (data[:, :, 1] == 255) & (data[:, :, 2] == 255))
+    # create grid
+    xx, yy = np.meshgrid(np.arange(data.shape[1]), np.arange(data.shape[0]))
+    xym =np.vstack((np.ravel(xx[mask]), np.ravel(yy[mask]))).T
+    # extracts data from array where mask is true
+    data0 = np.ravel(data[:, :, 0][mask])
+    # valid data points xym and corresponding data0 values are used to interpolate with nearest neighbor algorithm
+    interp0 = scipy.interpolate.NearestNDInterpolator(xym, data0)
+    # interpolated data is reshaped to original array
+    result0 = interp0(np.ravel(xx), np.ravel(yy)).reshape(xx.shape)
+    return result0
+
+
+def classification(CN_table,array1,array2):
+    """
+    classification
+        This function is used to classify an array with CN values using the values of first array
+         and the second array in a lookup table.
+    Parameters:
+        CN_table: .csv lookup table of CN values. The current table is based on the values found in Bera et al., 2022
+        and USACE HEC-HMS TR-55 CN table
+        array1: first array
+        array2: second array
+    Returns:
+        Classified array
+    """
+    table = []
+    with open(CN_table, 'r') as file:
+        reader = csv.reader(file)
+        for row in reader:
+            row = [int(value) for value in row]
+            table.append(row)
+    classification_dict = {}
+
+    # Creating a dictionary for classification
+    for row in table[1:]:
+        key = row[0]
+        for i, value in enumerate(row[1:], start=1):
+            if i == 0:
+                continue
+            dict_key = (key, i) # Create tuple key
+            classification_dict[dict_key] = value # Store classification value
+
+    # Populate the classified array based on classification dictionary
+    classified_array: ndarray = np.empty_like(array1, dtype=np.float32)
+    for i in range(array1.shape[0]):
+        for j in range(array1.shape[1]):
+            x = array1[i, j]
+            y = array2[i, j]
+            key = (x.item(), y.item())
+            if key in classification_dict:
+                classified_value = classification_dict[key]
+                classified_array[i, j] = classified_value # Assign classification value
+    return classified_array
+
+
+def AMCIII(array):
+    """
+    AMCIII
+        This function is used to convert the slope-corrected CN map to AMC III using the methodology of
+        Mishra et al., 2008.
+    Parameters:
+        CNarr: the numpy array containing the CN values in AMC II
+    Returns:
+        AMC III CN array
+
+    """
+    np.seterr(invalid='ignore')
+    CCN_arr = np.divide(array, (.43 + (array * 0.0057)))
+    return CCN_arr
+
+
+def AMCI(array):
+    """
+    AMCI
+        This function is used to convert the slope-corrected CN map to AMC I using the methodology of
+        Mishra et al., 2008.
+    Paramters:
+        CNarr: the numpy array containing the CN values in AMC II
+    Returns:
+        AMC I CN array
+
+    """
+    np.seterr(invalid='ignore')
+    CCN_arr = np.divide(array, (2.2754-(0.012754*array)))
+    return CCN_arr
+
+
+def prepare_S2image(fpath, scale_factor=10000.0, min_val=0, max_val=10000, no_data_pixels=-9999):
+    """
+    prepare_image
+        This function is used prepare an image for MESMA by scaling the reflectance from 0-1
+    Parameters:
+       fpath: filepath to an image
+       scale_factor: scale factor of reflectance data (MESMA requires values to be in range 0-1)
+       min_val: lower boundary of accepted reflectance values, all values <= min_val will be set to no_data_pixels
+       max_val: upper boundary of accepted reflectance values, all values > max_val will be set to no_data_pixels
+    Returns:
+        3D xarray.DataArray with reflectance scaled to range 0-1
+
+    """
+    img = rioxarray.open_rasterio(fpath)
+    return xr.where((img.min(dim='band')<=min_val) |
+                    (img.max(dim='band')>max_val), no_data_pixels*scale_factor,
+                    img).T / scale_factor
+
+
+def prepare_L8image(fpath, scale_factor=100000.0, min_val=0, max_val=100000, no_data_pixels=-9999):
+    """
+    prepare_image
+        This function is used prepare an image for MESMA by scaling the reflectance from 0-1
+    Parameters:
+       fpath: filepath to an image
+       scale_factor: scale factor of reflectance data (MESMA requires values to be in range 0-1)
+       min_val: lower boundary of accepted reflectance values, all values <= min_val will be set to no_data_pixels
+       max_val: upper boundary of accepted reflectance values, all values > max_val will be set to no_data_pixels
+    Returns:
+        3D xarray.DataArray with reflectance scaled to range 0-1
+
+    """
+    img = rioxarray.open_rasterio(fpath)
+    return xr.where((img.min(dim='band')<=min_val) |
+                    (img.max(dim='band')>max_val), no_data_pixels*scale_factor,
+                    img).T / scale_factor
+
+
+
+def prepare_sli(fpath, num_bands):
+    """
+    prepare_sli
+        This function is used prepare a spectral library for MESMA. The reflectance is scaled to range 0-1
+    Parameters:
+       fpath: filepath to an image
+       num_bands: number of bands in the spectral library. Must match number of bands in input image
+    Returns:
+        (1) 1D array of strings, a class for each endmember in the library
+        (2) 2D array of floats and shape (bands, endmembers) with reflectance scaled to range 0-1
+    """
+    sli = pd.read_csv(fpath)
+    class_list = sli.MaterialClass.values
+    em_spectra = sli[sli.columns[-num_bands:]].values.astype(float)
+    em_spectra /= np.max(em_spectra)
+
+    return class_list, em_spectra.T
+
+
+def not_modelled_spots(arr1, arr2, arr3):
+    """
+     not_modelled_spots
+         This function is used to fill areas with no appropriate MESMA models (where all fractions = 0) by interpolating
+         nearby values. The final arrays are then normalized so that all fractions add up to 1.
+     input:
+         arr1, arr2, arr3: vegetation, impervious, and soil arrays obtained from the MESMA function
+     output:
+         normalized_array1, normalized_array2, normalized_array3: filled and normalized arrays for the final fraction maps
+
+     """
+    filled_array1 = np.copy(arr1)
+    filled_array2 = np.copy(arr2)
+    filled_array3 = np.copy(arr3)
+    # Create the grid of non-zero pixel coordinates and interpolate values for 0 spots
+    zero_indices = np.argwhere((arr1 == 0) & (arr2 == 0) & (arr3 == 0))
+    non_zero_indices = np.argwhere((arr1 != 0) | (arr2 != 0) | (arr3 != 0))
+    x = non_zero_indices[:, 1]
+    y = non_zero_indices[:, 0]
+    # Interpolate the values for zero spots
+    filled_array1[zero_indices[:, 0], zero_indices[:, 1]] = griddata((x, y), arr1[non_zero_indices[:, 0], non_zero_indices[:, 1]], zero_indices, method='nearest')
+    filled_array2[zero_indices[:, 0], zero_indices[:, 1]] = griddata((x, y), arr2[non_zero_indices[:, 0], non_zero_indices[:, 1]], zero_indices, method='nearest')
+    filled_array3[zero_indices[:, 0], zero_indices[:, 1]] = griddata((x, y), arr3[non_zero_indices[:, 0], non_zero_indices[:, 1]], zero_indices, method='nearest')
+    # Normalize each array
+    stacked_array = np.stack((filled_array1, filled_array2, filled_array3))
+    sums = np.sum(stacked_array, axis=0)
+    normalized_array1 = filled_array1 / sums
+    normalized_array2 = filled_array2 / sums
+    normalized_array3 = filled_array3 / sums
+
+    return normalized_array1, normalized_array2, normalized_array3
+
+
+def trimmed_library(fpath, num_bands, row_numbers= None):
+    """
+     trimmed_library
+        This function uses the output of the AMUSES function to extract the relevant spectra for MESMA
+    Parameters:
+        fpath: path to spectral library
+        num_bands: number of bands in spectral library. Must match number of bands in input image
+        row_numbers: row number in generic spectral library of each spectra selected by AMUSES
+    Returns:
+    .   (1) class_list array: The material classes for the trimmed library
+        (2) em_spectra array: The  reflectance values for the trimmed library
+
+     """
+    df = pd.read_csv(fpath)
+    if row_numbers is not None:
+        df = df.iloc[row_numbers]
+
+    class_list = df.MaterialClass.values
+    em_spectra = df[df.columns[-num_bands:]].values.astype(float)
+
+    # Normalize reflectance values to the range 0-1
+    em_spectra /= np.max(em_spectra)
+    return class_list, em_spectra.T
+
+
+def doMESMA(class_list,img, trim_lib):
+    """
+     doMESMA
+         This function carries out Multiple Endmember Spectral Mixture Analysis and subsequent shade normalization
+     Parameters:
+         class_list: Material classes (impervious, soil, vegetation) extracted from the spectral library
+         img: Prepared input image
+         trim_lib: Spectral library that has been pruned with the output of AMUSES
+         output: path to output file
+     Returns:
+         3D array with vegetation, impervious surface, and soil fractions
+     """
+
+    # Setup MESMA model based on trimmed spectral library
+    em_models = mesma.MesmaModels()
+    em_models.setup(class_list)
+    em_models = mesma.MesmaModels()
+    em_models.setup(class_list)
+
+    # Select 2-EM, 3-EM, 4-EM models for unmixing
+    em_models.select_level(state=True, level=2)
+    em_models.select_level(state=True, level=3)
+    em_models.select_level(state=False, level=4)
+    for i in np.arange(em_models.n_classes):
+        em_models.select_class(state=True, index=i, level=2)
+        em_models.select_class(state=True, index=i, level=3)
+        em_models.select_class(state=False, index=i, level=4)
+
+
+
+    out_fractions = np.zeros((len(np.unique(class_list)) + 1, img.shape[1], img.shape[2])) * np.nan
+    total_start = timeit.default_timer()
+    start_row = 0
+    split = 10  # number of rows per to be unmixed at a time
+
+    for chunk in range(start_row, img.shape[1], split):
+        start = timeit.default_timer()
+        MESMA = mesma.MesmaCore(n_cores=8)
+
+        models, fractions, rmse, residuals = MESMA.execute(image=img[:, start_row:start_row + split, :].data,
+                                                           library=trim_lib,
+                                                           look_up_table=em_models.return_look_up_table(),
+                                                           em_per_class=em_models.em_per_class,
+                                                           constraints=(0, 1.0, -0.1, 0.8, 0.025, -9999, -9999),
+                                                           no_data_pixels=np.where(
+                                                               img[0, start_row:start_row + split,
+                                                               :].data == -9999),
+                                                           shade_spectrum=None,
+                                                           fusion_value=0.007,
+                                                           bands_selection_values=(0.99, 0.01)
+                                                           )
+
+        np.seterr(invalid='ignore')
+        out_fractions[:, start_row:start_row + split, :] = fractions
+
+        start_row = start_row + split
+
+        stop = timeit.default_timer()
+
+        # Obtain time for each chunk to be unmixed
+        print('Chunk Time: ', stop - start)
+
+    total_stop = timeit.default_timer()
+    print(f"Total execution time: {total_stop - total_start:.2f} seconds")
+
+    #Perform shade normalization
+    out_shade = shade_normalisation.ShadeNormalisation.execute(out_fractions, shade_band=-1)
+    return out_shade
