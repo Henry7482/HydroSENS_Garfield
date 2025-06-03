@@ -418,12 +418,12 @@ def process_dates(start_date, end_date, aoi, output_master, amc, p, coordinates,
 
     data = {
         'date': [d.strftime('%Y-%m-%d') for d in dates_with_images],
-        'veg_mean': vegetation_values,
-        'soil_mean': soil_values,
-        'curve_number': curve_number,
-        'ndvi': ndvi_values,
-        'temperature': avg_temp,
-        'precipitation': avg_p
+        'veg_mean': nan_to_zero(vegetation_values),
+        'soil_mean': nan_to_zero(soil_values),
+        'curve_number': nan_to_zero(curve_number),
+        'ndvi': nan_to_zero(ndvi_values),
+        'temperature': nan_to_zero(avg_temp),
+        'precipitation': nan_to_zero(avg_p)
     }
     
     formatted_data = {}

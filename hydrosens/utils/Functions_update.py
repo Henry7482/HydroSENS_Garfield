@@ -21,6 +21,7 @@ import geemap
 from datetime import datetime
 import cdsapi
 from shapely.geometry import Polygon
+import math
 
 def coordinates_to_polygon(coordinates):
     """
@@ -661,3 +662,6 @@ def doMESMA(class_list,img, trim_lib):
     #Perform shade normalization
     out_shade = shade_normalisation.ShadeNormalisation.execute(out_fractions, shade_band=-1)
     return out_shade
+
+def nan_to_zero(x):
+    return 0 if math.isnan(x) else x
