@@ -453,13 +453,6 @@ def process_dates(start_date, end_date, aoi, output_master, amc, p, coordinates,
 
     print(f"Data saved to {output_csv}")
 
-    # Delete extra files (no longer needed since we don't have shapefiles)
-    # suffix = "_gcs"
-    # pattern = f"*{suffix}.*"
-    # files = glob.glob(os.path.join(output_master, pattern))
-    # for file in files:
-    #     os.remove(file)
-
     return formatted_data
 
 
