@@ -18,3 +18,4 @@ flask
 Jinja2
 google-genai
 python-dotenv
+shapely
