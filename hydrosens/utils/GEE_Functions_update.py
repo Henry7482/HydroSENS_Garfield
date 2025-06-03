@@ -9,6 +9,37 @@ credentials = ee.ServiceAccountCredentials(service_account, r"./.secret/hydrosen
 ee.Initialize(credentials)
 
 
+def coordinates_to_ee_geometry(coordinates):
+    """
+    Convert coordinate array to Earth Engine Geometry
+    
+    Parameters:
+        coordinates: List of [lon, lat] pairs defining the polygon boundary
+    Returns:
+        ee.Geometry.Polygon
+    """
+    # Ensure the polygon is closed (first and last coordinates are the same)
+    if coordinates[0] != coordinates[-1]:
+        coordinates = coordinates + [coordinates[0]]
+    
+    return ee.Geometry.Polygon([coordinates])
+
+
+def get_centroid_from_coordinates(coordinates):
+    """
+    Calculate centroid from coordinate array
+    
+    Parameters:
+        coordinates: List of [lon, lat] pairs
+    Returns:
+        tuple: (centroid_lon, centroid_lat)
+    """
+    import numpy as np
+    lons = [coord[0] for coord in coordinates]
+    lats = [coord[1] for coord in coordinates]
+    return np.mean(lons), np.mean(lats)
+
+
 def get_ERA5_temp(aoi, start_date, end_date):
     era5_collection = ee.ImageCollection('ECMWF/ERA5/DAILY') \
         .filterBounds(aoi) \
@@ -95,7 +126,7 @@ def load_Sentinel2(aoi, StartDate, EndDate):
         by cloud coverage in descending order, so that the first image selected in the mosaic function
         has the least cloud coverage.
     input:
-        aoi: The area of interest
+        aoi: The area of interest (ee.Geometry)
         StartDate: The start date of the satellite images
         EndDate: The end date of the satellite images;
     output:
@@ -143,20 +174,20 @@ def mosaic(filtered_col):
     return mosaic
 
 
-def resampling(image,shapefile_projection):
+def resampling(image, crs_string):
     """
     resampling
         This function is used to resample bands 8A, 11, and 12 to the 10m resolution of bands
         2, 3, and 4 using bilinear reasmpling.
     input:
         image: product of mosaic function
-        shapefile_projection: projection of the shapefile
+        crs_string: CRS string for projection
     output:
         resample: image with resampled bands
 
     """
     bands = image.select('B2', 'B3', 'B4', 'B7', 'B8', 'B8A', 'B11', 'B12')
-    resample = bands.resample('bilinear').reproject(crs=shapefile_projection, scale=10)
+    resample = bands.resample('bilinear').reproject(crs=crs_string, scale=10)
     return resample
 
 
@@ -166,7 +197,7 @@ def getDEM(aoi):
         This function is used to obtain the elevation data from FABDEM, the
         Forest And Buildings removed Copernicus 30m DEM in the area of interest.
     input:
-            aoi: the area of interest
+            aoi: the area of interest (ee.Geometry)
     output:
         DEM:  FABDEM image with the elevation data
 
@@ -178,16 +209,16 @@ def getDEM(aoi):
     return DEM
 
 
-def Bandsexport(image,shapefile_projection,output,aoi):
+def Bandsexport(image, crs_string, output, aoi):
     """
     Bandsexport
         This function is used to export the resampled Sentinel 2 images to a geotiff file.
-        The output geotiff matches the aoi shapefile projection and bounds.
+        The output geotiff matches the aoi projection and bounds.
     input:
         image: image with bands 2,3,4,8A,11, and 12
-        shapefile projection: projection of input shapefile
+        crs_string: CRS string for projection
         output: output folder
-        aoi: the area of interest
+        aoi: the area of interest (ee.Geometry)
     output:
         Bands.tif in the user-designated output folder
 
@@ -198,22 +229,22 @@ def Bandsexport(image,shapefile_projection,output,aoi):
 
     final_selected = image.select(band_names, band_names).float()
 
-    geemap.ee_export_image(final_selected, output_file, scale=10, region=aoi.geometry(),
-                           crs=shapefile_projection)
+    geemap.ee_export_image(final_selected, output_file, scale=10, region=aoi,
+                           crs=crs_string)
     return Bandsexport
 
 
-def DEMexport(image,shapefile_projection,output,aoi):
+def DEMexport(image, crs_string, output, aoi):
     """
     DEMexport
         This function is used to export the elevation data of the FABDEM to a geotiff file.
-        The output geotiff matches the aoi shapefile projection and bounds, along with a 10 m
+        The output geotiff matches the aoi projection and bounds, along with a 10 m
         spatial resolution.
     input:
         image:image with FABDEM elevation data
-         shapefile projection: projection of input shapefile
+        crs_string: CRS string for projection
         output: output folder
-        aoi: the area of interest
+        aoi: the area of interest (ee.Geometry)
     output:
         DEM.tif in the user-designated output folder
 
@@ -224,20 +255,20 @@ def DEMexport(image,shapefile_projection,output,aoi):
 
     final_selected = image.select(band_names, band_names)
 
-    geemap.ee_export_image(final_selected, output_file, scale=10, region=aoi.geometry(),
-                           crs=shapefile_projection)
+    geemap.ee_export_image(final_selected, output_file, scale=10, region=aoi,
+                           crs=crs_string)
     return DEMexport
 
-def Bandsexport_Landsat(image,shapefile_projection,output,aoi):
+def Bandsexport_Landsat(image, crs_string, output, aoi):
     """
     Bandsexport
         This function is used to export the Landsat 8 images to a geotiff file.
-        The output geotiff matches the aoi shapefile projection and bounds.
+        The output geotiff matches the aoi projection and bounds.
     input:
         image: image with bands 2,3,4,5, 6, and 7
-        shapefile projection: projection of input shapefile
+        crs_string: CRS string for projection
         output: output folder
-        aoi: the area of interest
+        aoi: the area of interest (ee.Geometry)
     output:
         Bands.tif in the user-designated output folder
 
@@ -248,20 +279,20 @@ def Bandsexport_Landsat(image,shapefile_projection,output,aoi):
 
     final_selected = image.select(band_names, band_names).float()
 
-    geemap.ee_export_image(final_selected, output_file, scale=30, region=aoi.geometry(),
-                           crs=shapefile_projection)
+    geemap.ee_export_image(final_selected, output_file, scale=30, region=aoi,
+                           crs=crs_string)
 
-def DEMexport_Landsat(image,shapefile_projection,output,aoi):
+def DEMexport_Landsat(image, crs_string, output, aoi):
     """
     DEMexport
         This function is used to export the elevation data of the FABDEM to a geotiff file.
-        The output geotiff matches the aoi shapefile projection and bounds, along with a 10 m
+        The output geotiff matches the aoi projection and bounds, along with a 10 m
         spatial resolution.
     input:
         image:image with FABDEM elevation data
-         shapefile projection: projection of input shapefile
+        crs_string: CRS string for projection
         output: output folder
-        aoi: the area of interest
+        aoi: the area of interest (ee.Geometry)
     output:
         DEM.tif in the user-designated output folder
 
@@ -272,6 +303,6 @@ def DEMexport_Landsat(image,shapefile_projection,output,aoi):
 
     final_selected = image.select(band_names, band_names)
 
-    geemap.ee_export_image(final_selected, output_file, scale=30, region=aoi.geometry(),
-                           crs=shapefile_projection)
+    geemap.ee_export_image(final_selected, output_file, scale=30, region=aoi,
+                           crs=crs_string)
     return DEMexport
