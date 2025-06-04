@@ -418,12 +418,12 @@ def process_dates(start_date, end_date, aoi, output_master, amc, p, coordinates,
 
     data = {
         'date': [d.strftime('%Y-%m-%d') for d in dates_with_images],
-        'veg_mean': nan_to_zero(vegetation_values),
-        'soil_mean': nan_to_zero(soil_values),
-        'curve_number': nan_to_zero(curve_number),
-        'ndvi': nan_to_zero(ndvi_values),
-        'temperature': nan_to_zero(avg_temp),
-        'precipitation': nan_to_zero(avg_p)
+        'veg_mean': vegetation_values,
+        'soil_mean': soil_values,
+        'curve_number': curve_number,
+        'ndvi': ndvi_values,
+        'temperature': avg_temp,
+        'precipitation': avg_p
     }
     
     formatted_data = {}
@@ -431,12 +431,12 @@ def process_dates(start_date, end_date, aoi, output_master, amc, p, coordinates,
     for i in range(len(data['date'])):
         date = data['date'][i]
         formatted_data[date] = {
-            "ndvi": data['ndvi'][i],
-            "soil-fraction": data['soil_mean'][i],
-            "vegetation-fraction": data['veg_mean'][i],
-            "precipitation": data['precipitation'],
-            "temperature": data['temperature'],
-            "curve-number": data['curve_number'][i]
+            "ndvi": nan_to_zero(data['ndvi'][i]),
+            "soil-fraction": nan_to_zero(data['soil_mean'][i]),
+            "vegetation-fraction": nan_to_zero(data['veg_mean'][i]),
+            "precipitation": nan_to_zero(data['precipitation']),
+            "temperature": nan_to_zero(data['temperature']),
+            "curve-number": nan_to_zero(data['curve_number'][i])
         }
 
     df = pd.DataFrame(data)
