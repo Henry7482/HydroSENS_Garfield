@@ -447,7 +447,7 @@ def process_dates(start_date, end_date, aoi, output_master, amc, p, coordinates,
     # Create a filename based on coordinates (using first coordinate as identifier)
     coord_id = f"coords_{coordinates[0][0]:.3f}_{coordinates[0][1]:.3f}"
     print("Output master: ", output_master)
-    output_csv = os.path.join(output_master, coord_id + '.csv')
+    output_csv = os.path.join(output_master, "output" + '.csv')
 
     df.to_csv(output_csv, index=False)
 

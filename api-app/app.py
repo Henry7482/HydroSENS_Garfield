@@ -59,11 +59,39 @@ def analyze():
         print(f"[analyze] Forwarding to HydroSENS at {hydrosens_url}")
         response = requests.post(hydrosens_url, json=data_payload)
         print(f"[analyze] HydroSENS responded with status {response.status_code}")
+
+        output_master = os.getenv("OUTPUT_MASTER", "./data/output")
+        csv_file = requests.get(hydrosens_url + "/csv-file")
+        # Save the CSV file to output master
+        # Check if download is successful
+        if csv_file.status_code == 200:
+            # Determine the filename (you can also parse from headers if needed)
+            csv_filename = "output.csv"
+            csv_path = os.path.join(output_master, csv_filename)
+
+            os.makedirs(output_master, exist_ok=True)
+
+            # Write the content to file
+            with open(csv_path, "wb") as f:
+                f.write(csv_file.content)
+
         return jsonify(response.json()), response.status_code
 
     except Exception as e:
         print(f"[analyze] Exception:", str(e))
         return jsonify({"error": str(e)}), 500
+
+@app.route('/analyze/export-csv', methods=['GET'])
+def get_csv_file():
+    """Endpoint to retrieve the CSV output file."""
+    output_master = os.getenv('OUTPUT_MASTER', './data/output')
+    csv_file_path = os.path.join(output_master, 'output.csv')
+
+    if not os.path.exists(csv_file_path):
+        return jsonify({"error": "CSV output file not found."}), 404
+
+    return send_file(csv_file_path, mimetype='text/csv', as_attachment=True, download_name='output.csv')
+
 
 @app.route('/generate-report', methods=['POST'])
 def generate_report():
