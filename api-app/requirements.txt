@@ -4,3 +4,5 @@ Jinja2
 google-genai
 python-dotenv
 google-api-core
+Flask-Cors
+pyproj

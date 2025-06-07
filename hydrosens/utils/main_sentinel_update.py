@@ -13,22 +13,42 @@ import time
 # Start the timer
 start_time = time.time()
 
-def run_hydrosens (main_folder, start_date, end_date, output_master, amc, p, shapefiles_path):
-    """Run the Hydrosens workflow for a given date range and area of interest."""
-    shapefiles = [f for f in os.listdir(shapefiles_path) if f.endswith('.shp')] 
-    for shapefile in shapefiles: 
-        # Skip shapefiles that contain '_gcs' in their name 
-        if '_gcs' in shapefile: 
-            print(f"Skipping shapefile: {shapefile} (contains '_gcs')") 
-            continue 
-        shapefile_path = os.path.join(shapefiles_path, shapefile) 
-        print(f"Processing shapefile: {shapefile_path}") 
-        aoi = geemap.shp_to_ee(shapefile_path) 
-        return process_dates(start_date, end_date, aoi, output_master, amc, p, shapefile_path) 
+def run_hydrosens(main_folder, start_date, end_date, output_master, amc, p, coordinates, crs='EPSG:4326'):
+    """
+    Run the Hydrosens workflow for a given date range and coordinate-based area of interest.
+    
+    Parameters:
+        main_folder: Main working folder
+        start_date: Start date for analysis
+        end_date: End date for analysis  
+        output_master: Output directory
+        amc: Antecedent Moisture Condition
+        p: Precipitation value
+        coordinates: List of [lon, lat] pairs defining the polygon boundary
+        crs: Coordinate reference system (default: 'EPSG:4326')
+    """
+    # Clear all contents of the output_master directory
+    if os.path.exists(output_master):
+        for filename in os.listdir(output_master):
+            file_path = os.path.join(output_master, filename)
+            try:
+                if os.path.isfile(file_path) or os.path.islink(file_path):
+                    os.unlink(file_path)  # remove file or symlink
+                elif os.path.isdir(file_path):
+                    shutil.rmtree(file_path)  # remove directory
+            except Exception as e:
+                print(f'Failed to delete {file_path}. Reason: {e}')
+    
+    # Convert coordinates to Earth Engine geometry
+    aoi = coordinates_to_ee_geometry(coordinates)
+    
+    print(f"Processing coordinate-based AOI with {len(coordinates)} vertices")
+    return process_dates(start_date, end_date, aoi, output_master, amc, p, coordinates, crs)
 
 
-def process_dates(start_date, end_date, aoi, output_master, amc, p, shapefile_path):
+def process_dates(start_date, end_date, aoi, output_master, amc, p, coordinates, crs):
     """Process Sentinel-2 images within a date range if imagery exists."""
+
     HSG250m = os.getenv("HSG250m")
     sli = os.getenv("SLI")
     dates_with_images = []
@@ -39,7 +59,6 @@ def process_dates(start_date, end_date, aoi, output_master, amc, p, shapefile_pa
     ndvi_values = []
     avg_temp = []
     avg_p = []
-
 
     if isinstance(start_date, str):
         start_date = datetime.strptime(start_date, '%Y-%m-%d')
@@ -70,26 +89,21 @@ def process_dates(start_date, end_date, aoi, output_master, amc, p, shapefile_pa
 
         print(f"Processing image from {date}")
 
-        dataframe = gpd.read_file(shapefile_path)
-        shapefile_pro = dataframe.crs
-        shapefile_projection = shapefile_pro.to_string()
-        resample_img = resampling(filtered_col, shapefile_projection)
+        # Use the provided CRS instead of reading from shapefile
+        crs_string = crs
+        resample_img = resampling(filtered_col, crs_string)
         DEM = getDEM(aoi)
-        Bandsexport(resample_img, shapefile_projection, output, aoi)
-        DEMexport(DEM, shapefile_projection, output, aoi)
-
-
+        Bandsexport(resample_img, crs_string, output, aoi)
+        DEMexport(DEM, crs_string, output, aoi)
 
         target = CDS_temp(date, output)
         df = extract_data(target)
-        print("shape file path: ", shapefile_path)
-        avg_temp = get_temp(shapefile_path, df)
+        print("Using coordinate-based AOI")
+        avg_temp = get_temp(coordinates, df)
 
         target = CDS_precip(date, output)
         df = extract_p_data(target)
-        avg_p = get_p(shapefile_path, df)
-
-
+        avg_p = get_p(coordinates, df)
 
         bands = gdal.Open(output + r"/Bands.tif")
         band_array = bands.ReadAsArray()
@@ -188,7 +202,6 @@ def process_dates(start_date, end_date, aoi, output_master, amc, p, shapefile_pa
         impervious_values.append(np.nanmean(impervious))
         soil_values.append(np.nanmean(soil))
 
-
         del img
         os.remove(output + r"/trimmed_library.csv")
         CreateFloat(soil, image, "soil", output)
@@ -197,21 +210,40 @@ def process_dates(start_date, end_date, aoi, output_master, amc, p, shapefile_pa
 
         ### Global Soil Dataset Processing ###
 
-        output_path = output + r"/new_shapefile.shp"
-        Create_buffer(shapefile_path, output_path)
+        # Create buffered coordinates for soil dataset extraction
+        try:
+            buffered_coords, buffered_crs = Create_buffer(coordinates, crs)
+            print(f"Created buffer with {len(buffered_coords)} coordinates")
+        except Exception as e:
+            print(f"Error creating buffer: {e}")
+            raise
 
-        # Matching global dataset projection to new shapefile in order to extract by mask
-        data = gpd.read_file(output + r"/new_shapefile.shp")
-        HSG250m_open = gdal.Open(HSG250m)
-        setcrs = HSG250m_open.GetProjection()
-        data = data.to_crs(setcrs)
-        data.to_file(output + r"/new_shapefile.shp")
-        del data
+        # Matching global dataset projection to buffered coordinates for extraction
+        try:
+            HSG250m_open = gdal.Open(HSG250m)
+            if HSG250m_open is None:
+                raise ValueError(f"Could not open HSG dataset: {HSG250m}")
+            soil_crs = HSG250m_open.GetProjection()
+            print(f"HSG dataset CRS: {soil_crs}")
+        except Exception as e:
+            print(f"Error accessing HSG dataset: {e}")
+            raise
 
-        # Extract study area from global dataset
-        HSGraster = rasterio.open(HSG250m)
-        newshape = gpd.read_file(output + r"/new_shapefile.shp")
-        initialExtract = Extract(HSG250m, output + r"/new_shapefile.shp", output + r"/extracted.tif", nodata_value=255)
+        # Extract study area from global dataset using buffered coordinates
+        try:
+            print(f"Extracting from HSG dataset using buffered coordinates...")
+            Extract(HSG250m, buffered_coords, buffered_crs, output + r"/extracted.tif", nodata_value=255)
+            print("HSG extraction completed successfully")
+        except Exception as e:
+            print(f"Error in HSG extraction: {e}")
+            # Try with original coordinates if buffered extraction fails
+            try:
+                print("Retrying with original coordinates...")
+                Extract(HSG250m, coordinates, crs, output + r"/extracted.tif", nodata_value=255)
+                print("HSG extraction with original coordinates completed")
+            except Exception as e2:
+                print(f"Error in HSG extraction retry: {e2}")
+                raise
 
         # Reproject extracted raster to match MNDWI
         MNDWI = gdal.Open(output + r"/null_MNDWI.tif")
@@ -229,7 +261,6 @@ def process_dates(start_date, end_date, aoi, output_master, amc, p, shapefile_pa
                          yRes=MNDWI_res[1], outputType=gdal.GDT_Int16)
 
         del inputfile, output_raster, MNDWI, warp
-        os.remove(output + r"/extracted.tif")
 
         # Fill NoData holes in the extracted data
         reference = gdal.Open(output + r"/HSG_match.tif")
@@ -239,12 +270,6 @@ def process_dates(start_date, end_date, aoi, output_master, amc, p, shapefile_pa
         matplotlib.pyplot.close()
         reference = None
         del data, filled, reference
-
-        os.remove(output + r"/new_shapefile.shp")
-        os.remove(output + r"/new_shapefile.shx")
-        os.remove(output + r"/new_shapefile.cpg")
-        os.remove(output + r"/new_shapefile.dbf")
-        os.remove(output + r"/new_shapefile.prj")
 
         # Reclassify to HSG value
         soilraster = gdal.Open(output + r"/filled.tif")
@@ -261,9 +286,6 @@ def process_dates(start_date, end_date, aoi, output_master, amc, p, shapefile_pa
         del soilraster
 
         extract_raster(output + r"/HSG_reclass.tif", output + r"/null_MNDWI.tif", output + r"/HSG_final.tif")
-
-        os.remove(output + r"/HSG_reclass.tif")
-        os.remove(output + r"/filled.tif")
 
         ### Initial CN classification for vegetation and soil ###
 
@@ -289,11 +311,14 @@ def process_dates(start_date, end_date, aoi, output_master, amc, p, shapefile_pa
         array1[np.isinf(array1)] = 0
 
         CreateInt(array1, NDVI, "veghealth", output)
-        finalshape = gpd.read_file(shapefile_path)
-        masked = rasterio.open(output + r"/veghealth.tif")
-        Extract(output + r"/veghealth.tif", shapefile_path, output + r"/Vegetation_Health.tif", nodata_value=255)
-        masked = None
-        os.remove(output + r"/veghealth.tif")
+        
+        # Extract using coordinates instead of shapefile
+        try:
+            Extract(output + r"/veghealth.tif", coordinates, crs, output + r"/Vegetation_Health.tif", nodata_value=255)
+            print("Vegetation health extraction completed")
+        except Exception as e:
+            print(f"Error in vegetation health extraction: {e}")
+            raise
 
         # Get files
         file2 = gdal.Open(output + r"/HSG_final.tif")
@@ -308,7 +333,6 @@ def process_dates(start_date, end_date, aoi, output_master, amc, p, shapefile_pa
         soil_reclass = classification(CN_table, array3, array2)
 
         file2 = None
-        os.remove(output + r"/HSG_final.tif")
 
         # CCN calculation
         imp_CN = 98
@@ -354,17 +378,16 @@ def process_dates(start_date, end_date, aoi, output_master, amc, p, shapefile_pa
         CCN_arr_final[CCN_arr_final == 0] = 100
         curve_number.append(np.nanmean(CCN_arr_final))
         CreateInt(CCN_arr_final, DEMfile, "CCN_masked", output)
-        finalshape = gpd.read_file(shapefile_path)
-        masked = rasterio.open(output + r"/CCN_masked.tif")
-        Extract(output + r"/CCN_masked.tif", shapefile_path, output + f"/CCN_final.tif", nodata_value=255)
+        
+        # Extract using coordinates instead of shapefile
+        try:
+            Extract(output + r"/CCN_masked.tif", coordinates, crs, output + f"/CCN_final.tif", nodata_value=255)
+            print("CCN final extraction completed")
+        except Exception as e:
+            print(f"Error in CCN final extraction: {e}")
+            raise
 
-
-        del masked, mask, DEMfile
-        os.remove(output + r"/CCN_masked.tif")
-        os.remove(output + r"/null_MNDWI.tif")
-        os.remove(output + r"/HSG_match.tif")
-        os.remove(output + r"/DEM.tif")
-        os.remove(output+ r'/impervious.tif')
+        del mask, DEMfile
 
         ### Runoff Calculation ###
 
@@ -408,43 +431,28 @@ def process_dates(start_date, end_date, aoi, output_master, amc, p, shapefile_pa
     for i in range(len(data['date'])):
         date = data['date'][i]
         formatted_data[date] = {
-            "ndvi": data['ndvi'][i],
-            "soil-fraction": data['soil_mean'][i],
-            "vegetation-fraction": data['veg_mean'][i],
-            "precipitation": data['precipitation'],
-            "temperature": data['temperature'],
-            "curve-number": data['curve_number'][i]
+            "ndvi": nan_to_zero(data['ndvi'][i]),
+            "soil-fraction": nan_to_zero(data['soil_mean'][i]),
+            "vegetation-fraction": nan_to_zero(data['veg_mean'][i]),
+            "precipitation": nan_to_zero(data['precipitation']),
+            "temperature": nan_to_zero(data['temperature']),
+            "curve-number": nan_to_zero(data['curve_number'][i])
         }
 
     df = pd.DataFrame(data)
     df = df[
     (df[['veg_mean', 'soil_mean', 'curve_number', 'ndvi', 'temperature']] != 0).all(axis=1)
     ]
-    shapefile_name = os.path.splitext(shapefile_path)[0]
-    output_csv = os.path.join(output_master, shapefile_name + '.csv')
-
     
+    # Create a filename based on coordinates (using first coordinate as identifier)
+    coord_id = f"coords_{coordinates[0][0]:.3f}_{coordinates[0][1]:.3f}"
+    print("Output master: ", output_master)
+    output_csv = os.path.join(output_master, "output" + '.csv')
+
     df.to_csv(output_csv, index=False)
 
     print(f"Data saved to {output_csv}")
 
-    # # Delete extra files
-    suffix = "_gcs"
-    pattern = f"*{suffix}.*"
-    files = glob.glob(os.path.join(output_master, pattern))
-    for file in files:
-        os.remove(file)
-
-    for date in dates_with_images:
-        date_folder = os.path.join(output_master, date.strftime('%Y-%m-%d'))
-
-        if os.path.isdir(date_folder):
-            try:
-                os.chmod(date_folder, 0o777)  # Ensure permissions allow deletion
-                shutil.rmtree(date_folder)
-                print(f"Deleted folder: {date_folder}")
-            except Exception as e:
-                print(f"Failed to delete {date_folder}: {e}")
     return formatted_data
 
 
@@ -460,4 +468,49 @@ def create_output_folder(base_output, date):
     return folder_path
 
 
-
+# Example usage function for the coordinate-based approach
+def run_hydrosens_with_coordinates(coordinates, start_date, end_date, output_dir, amc=2, precipitation=10.0, crs='EPSG:4326'):
+    """
+    Convenience function to run Hydrosens analysis with coordinate array
+    
+    Parameters:
+        coordinates: List of [lon, lat] pairs defining the polygon boundary
+                    Example: [[-120.5, 35.2], [-120.3, 35.2], [-120.3, 35.4], [-120.5, 35.4]]
+        start_date: Start date as string 'YYYY-MM-DD'
+        end_date: End date as string 'YYYY-MM-DD' 
+        output_dir: Output directory path
+        amc: Antecedent Moisture Condition (1, 2, or 3)
+        precipitation: Precipitation value in mm
+        crs: Coordinate reference system (default: 'EPSG:4326')
+    
+    Returns:
+        Dictionary with analysis results
+    """
+    
+    # Validate coordinates
+    if not coordinates or len(coordinates) < 3:
+        raise ValueError("Need at least 3 coordinate pairs to define a polygon")
+    
+    # Validate each coordinate pair
+    for i, coord in enumerate(coordinates):
+        if len(coord) != 2:
+            raise ValueError(f"Coordinate {i} must have exactly 2 values [lon, lat]")
+        if not (-180 <= coord[0] <= 180):
+            raise ValueError(f"Longitude {coord[0]} at position {i} is out of valid range [-180, 180]")
+        if not (-90 <= coord[1] <= 90):
+            raise ValueError(f"Latitude {coord[1]} at position {i} is out of valid range [-90, 90]")
+    
+    print(f"Running Hydrosens analysis for polygon with {len(coordinates)} vertices")
+    print(f"Date range: {start_date} to {end_date}")
+    print(f"AMC: {amc}, Precipitation: {precipitation}mm")
+    
+    return run_hydrosens(
+        main_folder=".",  # Current directory as main folder
+        start_date=start_date,
+        end_date=end_date, 
+        output_master=output_dir,
+        amc=amc,
+        p=precipitation,
+        coordinates=coordinates,
+        crs=crs
+    )

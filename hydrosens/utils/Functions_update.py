@@ -20,6 +20,38 @@ import netCDF4 as nc
 import geemap
 from datetime import datetime
 import cdsapi
+from shapely.geometry import Polygon
+import math
+
+def coordinates_to_polygon(coordinates):
+    """
+    Convert coordinate array to Shapely Polygon
+    
+    Parameters:
+        coordinates: List of [lon, lat] pairs defining the polygon boundary
+    Returns:
+        shapely.geometry.Polygon
+    """
+    # Ensure the polygon is closed (first and last coordinates are the same)
+    if coordinates[0] != coordinates[-1]:
+        coordinates = coordinates + [coordinates[0]]
+    
+    return Polygon(coordinates)
+
+
+def get_centroid_from_coordinates(coordinates):
+    """
+    Calculate centroid from coordinate array
+    
+    Parameters:
+        coordinates: List of [lon, lat] pairs
+    Returns:
+        tuple: (centroid_lon, centroid_lat)
+    """
+    polygon = coordinates_to_polygon(coordinates)
+    centroid = polygon.centroid
+    return centroid.x, centroid.y
+
 
 def CDS_temp(date, output):
 
@@ -38,7 +70,6 @@ def CDS_temp(date, output):
         "daily_statistic": "daily_mean",
         "time_zone": "utc+00:00",
         "frequency": "6_hourly",
-         "area": [10.5, -0.5, 5, 2] # country of Togo
     }
 
     client = cdsapi.Client()
@@ -64,13 +95,17 @@ def extract_data(nc_file_path):
 
     return df
 
-def get_temp (shapefile, df):
-    aoi = geemap.shp_to_ee(shapefile).first()
-    coord = aoi.geometry().coordinates().getInfo()
-    longitudes, latitudes = zip(*coord[0])
-
-    centroid_long = np.mean(longitudes)
-    centroid_lat = np.mean(latitudes)
+def get_temp(coordinates, df):
+    """
+    Get temperature for coordinate-based AOI
+    
+    Parameters:
+        coordinates: List of [lon, lat] pairs defining the polygon boundary
+        df: DataFrame with temperature data
+    Returns:
+        float: Temperature value in Celsius
+    """
+    centroid_long, centroid_lat = get_centroid_from_coordinates(coordinates)
 
     df['distance'] = np.sqrt((df['Latitude'] - centroid_lat)**2 + (df['Longitude'] - centroid_long)**2)
     closest_row = df.loc[df['distance'].idxmin()]
@@ -96,7 +131,6 @@ def CDS_precip(date, output):
         "daily_statistic": "daily_mean",
         "time_zone": "utc+00:00",
         "frequency": "6_hourly",
-        "area": [10.5, -0.5, 5, 2] # country of Togo
     }
 
 
@@ -133,13 +167,17 @@ def extract_p_data(nc_file_path):
 
     return df
 
-def get_p (shapefile, df):
-    aoi = geemap.shp_to_ee(shapefile).first()
-    coord = aoi.geometry().coordinates().getInfo()
-    longitudes, latitudes = zip(*coord[0])
-
-    centroid_long = np.mean(longitudes)
-    centroid_lat = np.mean(latitudes)
+def get_p(coordinates, df):
+    """
+    Get precipitation for coordinate-based AOI
+    
+    Parameters:
+        coordinates: List of [lon, lat] pairs defining the polygon boundary
+        df: DataFrame with precipitation data
+    Returns:
+        float: Precipitation value
+    """
+    centroid_long, centroid_lat = get_centroid_from_coordinates(coordinates)
 
     df['distance'] = np.sqrt((df['Latitude'] - centroid_lat)**2 + (df['Longitude'] - centroid_long)**2)
     closest_row = df.loc[df['distance'].idxmin()]
@@ -193,55 +231,127 @@ def CreateFloat(array, reference, array_name, output):
 
 
 
-def Extract(raster_path, shapefile_path, output_path, nodata_value = -9999):
+def Extract(raster_path, coordinates, crs, output_path, nodata_value = -9999):
     """
     Extract
-        Extracts a raster based on the extent of a shapefile.
+        Extracts a raster based on coordinate-defined polygon.
 
     Parameters:
         raster_path: Path to the input raster file.
-        shapefile_path: Path to the shapefile used as the extent mask.
+        coordinates: List of [lon, lat] pairs defining the polygon boundary
+        crs: CRS of the coordinates (string format like 'EPSG:4326')
         output_path: Path to the output extracted raster file.
         nodata_value : The value to be used for the nodata area
 
     Returns:
         None
     """
-    with rasterio.open(raster_path) as src:
-        shapefile = gpd.read_file(shapefile_path)
-        geometry = shapefile.geometry.values[0]
-        out_image, out_transform = mask(src, shapes=[geometry], crop=True)
+    try:
+        with rasterio.open(raster_path) as src:
+            # Create polygon from coordinates
+            polygon = coordinates_to_polygon(coordinates)
+            
+            # Create a temporary GeoDataFrame with the polygon
+            # Handle CRS string format
+            if isinstance(crs, str):
+                if crs.startswith('EPSG:'):
+                    crs_code = crs
+                else:
+                    crs_code = f'EPSG:{crs}'
+            else:
+                crs_code = crs
+                
+            gdf = gpd.GeoDataFrame([1], geometry=[polygon], crs=crs_code)
+            
+            # Transform to raster CRS if needed
+            if gdf.crs != src.crs:
+                gdf = gdf.to_crs(src.crs)
+            
+            geometry = gdf.geometry.values[0]
+            out_image, out_transform = mask(src, shapes=[geometry], crop=True)
 
-        out_meta = src.meta.copy()
-        out_meta.update({
-            "height": out_image.shape[1],
-            "width": out_image.shape[2],
-            "transform": out_transform
-        })
+            out_meta = src.meta.copy()
+            out_meta.update({
+                "height": out_image.shape[1],
+                "width": out_image.shape[2],
+                "transform": out_transform
+            })
 
-        if nodata_value is not None:
-            out_meta.update({"nodata": nodata_value})
-            out_image[out_image == 0] = nodata_value
+            if nodata_value is not None:
+                out_meta.update({"nodata": nodata_value})
+                out_image[out_image == 0] = nodata_value
 
-        with rasterio.open(output_path, "w", **out_meta) as dest:
-            dest.write(out_image)
+            with rasterio.open(output_path, "w", **out_meta) as dest:
+                dest.write(out_image)
+                
+    except Exception as e:
+        print(f"Error in Extract function: {e}")
+        raise
 
-def Create_buffer(input_shapefile, output_shapefile):
+def Create_buffer(coordinates, crs, buffer_distance=250):
     """"
     Create_buffer
-        This function is used create a buffer around the original shapefile. The soil dataset raster is coarse and
-        providing a buffered shapefile ensures that no information is lost as the raster is clipped to the study area.
+        This function is used create a buffer around the original coordinates. The soil dataset raster is coarse and
+        providing a buffered polygon ensures that no information is lost as the raster is clipped to the study area.
     Parameters:
-        input_shapefile: original input shapefile
-        output_shapefile: path to new shapefile with additional 250 m buffer
+        coordinates: List of [lon, lat] pairs defining the polygon boundary
+        crs: CRS of the coordinates (string format like 'EPSG:4326')
+        buffer_distance: Buffer distance in meters (default 250m)
     Returns:
-        None
+        List of buffered coordinates and CRS info for further processing
 
     """
-    gdf = gpd.read_file(input_shapefile)
-    buffered_geometries = gdf.geometry.buffer(250)
-    buffered_gdf = gpd.GeoDataFrame(geometry=buffered_geometries, crs=gdf.crs)
-    buffered_gdf.to_file(output_shapefile)
+    try:
+        # Create polygon from coordinates
+        polygon = coordinates_to_polygon(coordinates)
+        
+        # Handle CRS string format
+        if isinstance(crs, str):
+            if crs.startswith('EPSG:'):
+                crs_code = crs
+            else:
+                crs_code = f'EPSG:{crs}'
+        else:
+            crs_code = crs
+        
+        # Create GeoDataFrame
+        gdf = gpd.GeoDataFrame([1], geometry=[polygon], crs=crs_code)
+        
+        # For geographic CRS (degrees), convert to a projected CRS for accurate buffering
+        if gdf.crs.is_geographic:
+            # Get the center of the polygon to determine appropriate UTM zone
+            centroid = polygon.centroid
+            lon, lat = centroid.x, centroid.y
+            
+            # Determine UTM zone (simplified)
+            utm_zone = int((lon + 180) / 6) + 1
+            if lat >= 0:
+                utm_crs = f'EPSG:{32600 + utm_zone}'  # Northern hemisphere
+            else:
+                utm_crs = f'EPSG:{32700 + utm_zone}'  # Southern hemisphere
+            
+            # Transform to UTM for buffering
+            gdf_utm = gdf.to_crs(utm_crs)
+            buffered_gdf_utm = gdf_utm.copy()
+            buffered_gdf_utm.geometry = gdf_utm.geometry.buffer(buffer_distance)
+            
+            # Transform back to original CRS
+            buffered_gdf = buffered_gdf_utm.to_crs(crs_code)
+        else:
+            # Already in projected CRS, buffer directly
+            buffered_gdf = gdf.copy()
+            buffered_gdf.geometry = gdf.geometry.buffer(buffer_distance)
+        
+        # Extract buffered coordinates
+        buffered_polygon = buffered_gdf.geometry.values[0]
+        buffered_coords = list(buffered_polygon.exterior.coords)
+        
+        return buffered_coords, buffered_gdf.crs
+        
+    except Exception as e:
+        print(f"Error in Create_buffer: {e}")
+        print(f"Falling back to original coordinates without buffering")
+        return coordinates, crs
 
 
 def extract_raster(source, reference, output):
@@ -553,4 +663,5 @@ def doMESMA(class_list,img, trim_lib):
     out_shade = shade_normalisation.ShadeNormalisation.execute(out_fractions, shade_band=-1)
     return out_shade
 
-
+def nan_to_zero(x):
+    return 0 if math.isnan(x) else x
