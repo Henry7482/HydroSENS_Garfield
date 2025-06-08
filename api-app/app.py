@@ -74,6 +74,16 @@ def analyze():
             # Write the content to file
             with open(csv_path, "wb") as f:
                 f.write(csv_file.content)
+                
+        # Download zipped TIFs
+        tif_zip = requests.get(hydrosens_url + "/export-latest-tifs")
+        if tif_zip.status_code == 200:
+            tif_zip_path = os.path.join(output_master, "tif_outputs.zip")
+            with open(tif_zip_path, "wb") as f:
+                f.write(tif_zip.content)
+            print(f"[analyze] TIF zip saved at: {tif_zip_path}")
+        else:
+            print(f"[analyze] TIF zip request failed with status {tif_zip.status_code}")
 
         return jsonify(response.json()), response.status_code
 
@@ -81,16 +91,17 @@ def analyze():
         print(f"[analyze] Exception:", str(e))
         return jsonify({"error": str(e)}), 500
 
-@app.route('/analyze/export-csv', methods=['GET'])
-def get_csv_file():
-    """Endpoint to retrieve the CSV output file."""
+@app.route('/analyze/export-tifs', methods=['GET'])
+def get_tif_zip():
+    """Endpoint to retrieve the zipped TIF output."""
     output_master = os.getenv('OUTPUT_MASTER', './data/output')
-    csv_file_path = os.path.join(output_master, 'output.csv')
+    zip_file_path = os.path.join(output_master, 'tif_outputs.zip')
 
-    if not os.path.exists(csv_file_path):
-        return jsonify({"error": "CSV output file not found."}), 404
+    if not os.path.exists(zip_file_path):
+        return jsonify({"error": "TIF ZIP file not found."}), 404
 
-    return send_file(csv_file_path, mimetype='text/csv', as_attachment=True, download_name='output.csv')
+    return send_file(zip_file_path, mimetype='application/zip', as_attachment=True, download_name='tif_outputs.zip')
+
 
 
 @app.route('/generate-report', methods=['POST'])
