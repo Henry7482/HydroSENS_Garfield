@@ -3,6 +3,8 @@ from utils.main_sentinel_update import run_hydrosens_with_coordinates
 import os
 import base64
 import json
+import zipfile
+import tempfile
 
 app = Flask(__name__)
 
@@ -248,43 +250,41 @@ def get_csv_file():
     return send_file(csv_file_path, mimetype='text/csv', as_attachment=True, download_name='output.csv')
 
 
-@app.route('/export-latest-tifs', methods=['GET'])
-def export_tifs_content():
-    """Export TIF files as base64 encoded content."""
+@app.route('/hydrosens/export-latest-tifs', methods=['GET'])
+def export_tifs_zip():
+    """Create and return a zip of all .tif files in output directory."""
+    import zipfile
+    from io import BytesIO
+
     output_master = os.getenv('OUTPUT_MASTER', '/app/data/output')
-    tif_by_date = {}
+    zip_buffer = BytesIO()
 
     if not os.path.exists(output_master):
         return jsonify({"error": "Output folder does not exist"}), 404
 
     try:
-        for date_folder in os.listdir(output_master):
-            date_path = os.path.join(output_master, date_folder)
-            if os.path.isdir(date_path):
-                date_tifs = {}
-                for f in os.listdir(date_path):
-                    if f.endswith('.tif'):
-                        file_path = os.path.join(date_path, f)
-                        try:
-                            with open(file_path, 'rb') as file:
-                                encoded = base64.b64encode(file.read()).decode('utf-8')
-                                date_tifs[f] = encoded
-                        except Exception as e:
-                            date_tifs[f] = f"Error reading file: {str(e)}"
-                            app.logger.error(f"Error reading {file_path}: {str(e)}")
-                
-                if date_tifs:
-                    tif_by_date[date_folder] = date_tifs
+        with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zipf:
+            for date_folder in os.listdir(output_master):
+                date_path = os.path.join(output_master, date_folder)
+                if os.path.isdir(date_path):
+                    for file_name in os.listdir(date_path):
+                        if file_name.endswith('.tif'):
+                            file_path = os.path.join(date_path, file_name)
+                            arcname = os.path.join(date_folder, file_name)
+                            zipf.write(file_path, arcname=arcname)
 
-        return jsonify({
-            "message": "Exported .tif file contents as base64",
-            "tif_files": tif_by_date,
-            "total_dates": len(tif_by_date)
-        }), 200
-        
+        zip_buffer.seek(0)
+        return send_file(
+            zip_buffer,
+            mimetype='application/zip',
+            as_attachment=True,
+            download_name='tif_outputs.zip'
+        )
+
     except Exception as e:
-        app.logger.error(f"Error exporting TIF files: {str(e)}")
-        return jsonify({"error": f"Failed to export TIF files: {str(e)}"}), 500
+        app.logger.error(f"Error creating TIF zip: {str(e)}")
+        return jsonify({"error": f"Failed to create TIF zip: {str(e)}"}), 500
+
 
 
 @app.route('/health', methods=['GET'])
