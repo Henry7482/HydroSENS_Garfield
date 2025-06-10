@@ -102,7 +102,16 @@ def get_tif_zip():
 
     return send_file(zip_file_path, mimetype='application/zip', as_attachment=True, download_name='tif_outputs.zip')
 
+@app.route('/analyze/export-csv', methods=['GET'])
+def get_csv_file():
+    """Endpoint to retrieve the CSV output file."""
+    output_master = os.getenv('OUTPUT_MASTER', './data/output')
+    csv_file_path = os.path.join(output_master, 'output.csv')
 
+    if not os.path.exists(csv_file_path):
+        return jsonify({"error": "CSV output file not found."}), 404
+
+    return send_file(csv_file_path, mimetype='text/csv', as_attachment=True, download_name='output.csv')
 
 @app.route('/generate-report', methods=['POST'])
 def generate_report():
@@ -121,25 +130,7 @@ def generate_report():
         app.logger.error(f"Report generation failed: {str(e)}")
         return jsonify({"error": str(e)}), 500
 
-@app.route('/latest-tifs', methods=['GET'])
-def latest_tifs():
-    # 1. Check required fields
-    statistics = request.form.get("statistics", "").strip().lower()
-    if statistics == HYDROSENS_STATISTICS:
-        try:
-            # Get the HydroSENS URL
-            hydrosens_url = os.getenv("HYDROSENS_URL") + "/export-latest-tifs"
-            if not hydrosens_url:
-                return jsonify({"error": "HYDROSENS_URL environment variable is not set"}), 500
-            response = requests.get(hydrosens_url)
-            if response.status_code != 200:
-                return jsonify({"error": "Failed to fetch latest .tif files"}), response.status_code
-            return jsonify(response.json()), response.status_code
-        except Exception as e:
-            return jsonify({"error": str(e)}), 500
-    else:
-        return jsonify({"error": "Invalid statistics parameter"}), 400
-
+   
 @app.route('/convert', methods=['POST'])
 def convert_coordinates():
     data = request.get_json()
