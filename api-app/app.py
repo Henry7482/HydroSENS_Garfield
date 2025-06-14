@@ -1,5 +1,6 @@
 from flask import Flask, request, jsonify, send_file
 from  utils.generate_report import run_generate_report
+from utils.helpers import generate_unique_key
 import requests
 import os
 from flask_cors import CORS  
@@ -39,6 +40,7 @@ def analyze():
         return jsonify({"error": "Invalid coordinates format. Must be a valid JSON array."}), 400
 
     data_payload = {
+        "region_name": data.get("region_name", "Unknown Region"),
         "start_date": data.get("start_date"),
         "end_date": data.get("end_date"),
         "amc": data.get("amc"),
@@ -61,12 +63,17 @@ def analyze():
         print(f"[analyze] HydroSENS responded with status {response.status_code}")
 
         output_master = os.getenv("OUTPUT_MASTER", "./data/output")
+        filename = generate_unique_key(
+                data_payload["region_name"],
+                data_payload["start_date"],
+                data_payload["end_date"]
+        )
         csv_file = requests.get(hydrosens_url + "/csv-file")
         # Save the CSV file to output master
         # Check if download is successful
         if csv_file.status_code == 200:
             # Determine the filename (you can also parse from headers if needed)
-            csv_filename = "output.csv"
+            csv_filename = filename + ".csv"
             csv_path = os.path.join(output_master, csv_filename)
 
             os.makedirs(output_master, exist_ok=True)
@@ -78,7 +85,8 @@ def analyze():
         # Download zipped TIFs
         tif_zip = requests.get(hydrosens_url + "/export-latest-tifs")
         if tif_zip.status_code == 200:
-            tif_zip_path = os.path.join(output_master, "tif_outputs.zip")
+            tif_zip_filename = filename + ".zip"
+            tif_zip_path = os.path.join(output_master, tif_zip_filename)
             with open(tif_zip_path, "wb") as f:
                 f.write(tif_zip.content)
             print(f"[analyze] TIF zip saved at: {tif_zip_path}")
@@ -94,8 +102,18 @@ def analyze():
 @app.route('/analyze/export-tifs', methods=['GET'])
 def get_tif_zip():
     """Endpoint to retrieve the zipped TIF output."""
+    data = request.get_json()
+    if not data:
+        return jsonify({"error": "Invalid JSON payload"}), 400
+    regionName = data.get("region_name", "Unknown Region")
+    startDate = data.get("start_date")
+    endDate = data.get("end_date")
+    if not regionName or not startDate or not endDate:
+        return jsonify({"error": "Missing required parameters: region_name, start_date, end_date"}), 400
+    fileName = generate_unique_key(regionName, startDate, endDate) + ".zip"
+   
     output_master = os.getenv('OUTPUT_MASTER', './data/output')
-    zip_file_path = os.path.join(output_master, 'tif_outputs.zip')
+    zip_file_path = os.path.join(output_master, fileName)
 
     if not os.path.exists(zip_file_path):
         return jsonify({"error": "TIF ZIP file not found."}), 404
@@ -105,8 +123,17 @@ def get_tif_zip():
 @app.route('/analyze/export-csv', methods=['GET'])
 def get_csv_file():
     """Endpoint to retrieve the CSV output file."""
+    data = request.get_json()
+    if not data:
+        return jsonify({"error": "Invalid JSON payload"}), 400
+    regionName = data.get("region_name", "Unknown Region")
+    startDate = data.get("start_date")
+    endDate = data.get("end_date")
+    if not regionName or not startDate or not endDate:
+        return jsonify({"error": "Missing required parameters: region_name, start_date, end_date"}), 400
+    fileName = generate_unique_key(regionName, startDate, endDate) + ".csv"
     output_master = os.getenv('OUTPUT_MASTER', './data/output')
-    csv_file_path = os.path.join(output_master, 'output.csv')
+    csv_file_path = os.path.join(output_master, fileName)
 
     if not os.path.exists(csv_file_path):
         return jsonify({"error": "CSV output file not found."}), 404
