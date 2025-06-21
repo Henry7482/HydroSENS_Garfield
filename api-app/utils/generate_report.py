@@ -16,8 +16,8 @@ def run_generate_report(metrics_data):
 
     # --- 1. Get data for the Report ---
     print("Step 1: Generating content...")
-    report_data = generate_content(metrics_data)
-    # report_data = metrics_data # FOR DEMO ONLY
+    # report_data = generate_content(metrics_data)
+    report_data = metrics_data # FOR DEMO ONLY
 
     # --- 2. Render the LaTeX template ---
     print("Step 2: Rendering LaTeX template...")
@@ -48,7 +48,7 @@ def run_generate_report(metrics_data):
         jobname=REPORT_JOBNAME,
         output_dir=OUTPUT_DIR,
         use_latexmk=True, # Recommended
-        latex_engine="pdflatex", # latexmk will use this engine
+        latex_engine="xelatex", # latexmk will use this engine
         assets_paths=None, # Pass paths to images, etc.
         keep_tex_file=KEEP_TEX
     )

@@ -34,7 +34,7 @@ def tex_escape(text):
     return regex.sub(lambda match: conv[match.group()], text)
 
 def compile_latex_to_pdf(latex_content, jobname="report", output_dir="output",
-                         use_latexmk=True, latex_engine="pdflatex",
+                         use_latexmk=True, latex_engine="xelatex",
                          assets_paths=None, keep_tex_file=False):
     """
     Compiles a LaTeX string into a PDF.
@@ -55,6 +55,10 @@ def compile_latex_to_pdf(latex_content, jobname="report", output_dir="output",
         tex_filepath_temp = os.path.join(temp_compile_dir, tex_filename)
         pdf_filepath_temp = os.path.join(temp_compile_dir, f"{jobname}.pdf")
         log_filepath_temp = os.path.join(temp_compile_dir, f"{jobname}.log")
+        # Copy assets to temp_compile_dir
+        assets_src = os.path.join(os.path.dirname(__file__), '../data/assets')
+        assets_dst = os.path.join(temp_compile_dir, 'assets')
+        shutil.copytree(assets_src, assets_dst)
 
         # Write the LaTeX content to a .tex file in the temporary directory
         with open(tex_filepath_temp, "w", encoding="utf-8") as f:
@@ -72,7 +76,6 @@ def compile_latex_to_pdf(latex_content, jobname="report", output_dir="output",
             command = [
                 "latexmk",
                 f"-{latex_engine}", # Specify engine for latexmk
-                "-pdf",             # Generate PDF
                 "-interaction=nonstopmode",
                 "-file-line-error", # More precise error messages
                 f"-jobname={jobname}",
@@ -93,7 +96,7 @@ def compile_latex_to_pdf(latex_content, jobname="report", output_dir="output",
         # latexmk often needs to be run once.
         # If not using latexmk, you might need to run the latex_engine multiple times
         # for things like Table of Contents, citations, etc. latexmk handles this.
-        num_runs = 1 if use_latexmk else 2 # Basic: 2 runs for pdflatex for TOC/refs
+        num_runs = 1 if use_latexmk else 2 # Basic: 2 runs for xelatex for TOC/refs
 
         for i in range(num_runs):
             process = subprocess.run(command, cwd=temp_compile_dir, capture_output=True, text=True, encoding="utf-8", errors="replace")
