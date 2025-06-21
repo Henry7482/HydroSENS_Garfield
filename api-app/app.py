@@ -1,6 +1,6 @@
 from flask import Flask, request, jsonify, send_file
 from  utils.generate_report import run_generate_report
-from utils.helpers import generate_unique_key
+from utils.helpers import generate_unique_key, generate_unique_file_path, get_json_from_csv
 import requests
 import os
 from flask_cors import CORS  
@@ -110,11 +110,8 @@ def get_tif_zip():
     endDate = data.get("end_date")
     if not regionName or not startDate or not endDate:
         return jsonify({"error": "Missing required parameters: region_name, start_date, end_date"}), 400
-    fileName = generate_unique_key(regionName, startDate, endDate) + ".zip"
-   
-    output_master = os.getenv('OUTPUT_MASTER', './data/output')
-    zip_file_path = os.path.join(output_master, fileName)
 
+    zip_file_path = generate_unique_file_path(regionName, startDate, endDate, extension=".zip")
     if not os.path.exists(zip_file_path):
         return jsonify({"error": "TIF ZIP file not found."}), 404
 
@@ -131,9 +128,7 @@ def get_csv_file():
     endDate = data.get("end_date")
     if not regionName or not startDate or not endDate:
         return jsonify({"error": "Missing required parameters: region_name, start_date, end_date"}), 400
-    fileName = generate_unique_key(regionName, startDate, endDate) + ".csv"
-    output_master = os.getenv('OUTPUT_MASTER', './data/output')
-    csv_file_path = os.path.join(output_master, fileName)
+    csv_file_path = generate_unique_file_path(regionName, startDate, endDate, extension=".csv")
 
     if not os.path.exists(csv_file_path):
         return jsonify({"error": "CSV output file not found."}), 404
@@ -142,9 +137,25 @@ def get_csv_file():
 
 @app.route('/generate-report', methods=['POST'])
 def generate_report():
+    data = request.get_json()
+    if not data:
+        return jsonify({"error": "Invalid JSON payload"}), 400
+    regionName = data.get("region_name", "Unknown Region")
+    startDate = data.get("start_date")
+    endDate = data.get("end_date")
+    coordinates = data.get("coordinates", [])
+    if not regionName or not startDate or not endDate or not coordinates:
+        return jsonify({"error": "Missing required parameters"}), 400
+    csv_file_path = generate_unique_file_path(regionName, startDate, endDate, extension=".csv")
+    json_data = get_json_from_csv(csv_file_path)
+    if not json_data:
+        return jsonify({"error": "CSV file not found or invalid"}), 404
+    json_data['region'] = regionName
+    print(json_data)
+    
     try:
         # Run report generation and get the output PDF path
-        pdf_file_path = run_generate_report(request.get_json())
+        pdf_file_path = run_generate_report(json_data)
 
         # Send the file to the user
         return send_file(
