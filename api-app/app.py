@@ -51,31 +51,36 @@ def analyze():
     }
 
     try:
+        csv_path = generate_unique_file_path(
+            data_payload["region_name"],
+            data_payload["start_date"],
+            data_payload["end_date"],
+            extension=".csv"
+        )
+        
+        if os.path.exists(csv_path):
+            return get_json_from_csv(csv_path)
+        
         # Prepare files payload
         hydrosens_url = os.getenv("HYDROSENS_URL")
         if not hydrosens_url:
             print("[analyze] HYDROSENS_URL not set")
             return jsonify({"error": "HYDROSENS_URL environment variable is not set"}), 500
         hydrosens_url = hydrosens_url.rstrip("/") + "/hydrosens"
-
+        
         print(f"[analyze] Forwarding to HydroSENS at {hydrosens_url}")
         response = requests.post(hydrosens_url, json=data_payload)
         print(f"[analyze] HydroSENS responded with status {response.status_code}")
 
         output_master = os.getenv("OUTPUT_MASTER", "./data/output")
-        filename = generate_unique_key(
-                data_payload["region_name"],
-                data_payload["start_date"],
-                data_payload["end_date"]
-        )
+       
+
+        
         csv_file = requests.get(hydrosens_url + "/csv-file")
         # Save the CSV file to output master
         # Check if download is successful
         if csv_file.status_code == 200:
             # Determine the filename (you can also parse from headers if needed)
-            csv_filename = filename + ".csv"
-            csv_path = os.path.join(output_master, csv_filename)
-
             os.makedirs(output_master, exist_ok=True)
 
             # Write the content to file
@@ -85,8 +90,12 @@ def analyze():
         # Download zipped TIFs
         tif_zip = requests.get(hydrosens_url + "/export-latest-tifs")
         if tif_zip.status_code == 200:
-            tif_zip_filename = filename + ".zip"
-            tif_zip_path = os.path.join(output_master, tif_zip_filename)
+            tif_zip_path = generate_unique_file_path(
+                data_payload["region_name"],
+                data_payload["start_date"],
+                data_payload["end_date"],
+                extension=".zip"
+            ) 
             with open(tif_zip_path, "wb") as f:
                 f.write(tif_zip.content)
             print(f"[analyze] TIF zip saved at: {tif_zip_path}")
