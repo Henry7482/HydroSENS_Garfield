@@ -35,20 +35,16 @@ def generate_content(input_dict):
 
 
     class MetricDescription(str, Enum):
-        ndvi = "Indicates vegetation health from 0 to 1."
+        ndvi = "Quantifies the greenness and density of vegetation from 0 to 1."
         vegetation_fraction = "Proportion of ground covered by vegetation."
-        soil_fraction = "Volumetric water content in the soil."
+        soil_fraction = "Proportion of exposed soil in a given area."
         precipitation = "Amount of rainfall in millimeters."
-        temperature = "Average surface temperature in degrees Celsius."
-        curve_number = "Runoff potential."
+        temperature = "The measure of atmospheric heat in degrees Celsius."
+        curve_number = "Direct surface runoff from a rainfall event."
 
     class KeyInsight(BaseModel):
         title: str
         detail: str
-
-    class SeriesItem(BaseModel):
-        timestamp: str
-        value: float
 
     class Metric(BaseModel):
         id: MetricID
@@ -58,7 +54,7 @@ def generate_content(input_dict):
         mean_value: float
         mean_insight: str
         time_insight: str
-        series: list[SeriesItem]
+        trend: str
 
     class ReportContent(BaseModel):
         location: str
@@ -159,7 +155,7 @@ Your job is to generate the report's content and fit them into the provided json
 - mean_insight: Interpret the calculated mean value. What does this average value suggest about the condition (e.g., "An average NDVI of X suggests moderate vegetation density," "An average curve number of Y indicates typical runoff potential for this area"). Relate it to the region's context if possible.
 - time_insight: Analyze each metric value through the given time period and write a short paragraph of the time series insight gathered from the data. 
 - action_plan: write a action plan as a list of potential action items that the stakeholers can take based on all the insights of the report.
-- trend: A word to capture the trend of the time series.
+- trend: A word to capture the trend of the time series if the metric.
 
 **Input Data:**
 Here is the input data you will analyze
