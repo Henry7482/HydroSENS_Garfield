@@ -16,11 +16,24 @@ def run_generate_report(metrics_data):
 
     # --- 1. Get data for the Report ---
     print("Step 1: Generating content...")
-    # report_data = generate_content(metrics_data)
-    report_data = metrics_data # FOR DEMO ONLY
+    report_data = generate_content(metrics_data)
+    # report_data = metrics_data # FOR DEMO ONLY
 
-    # --- 2. Render the LaTeX template ---
-    print("Step 2: Rendering LaTeX template...")
+    # --- 2. Generate graphs using Mathplotlib ---
+    """
+    Use metrics_data to generate timeseries graphs, save as image in assets/graphs.
+    Add image path to each metric datapoint by id (graph_image_path)
+    """  
+
+    # --- 3. Generate region screenshot ---
+    """
+    Get coordinates from metric data (metrics_data.coordinates)
+    """
+
+
+
+    # --- 4. Render the LaTeX template ---
+    print("Step 4: Rendering LaTeX template...")
     # Option A: Load template from file
     template_full_path = os.path.join(TEMPLATE_DIR, TEMPLATE_FILENAME)
     if not os.path.exists(template_full_path):
@@ -41,8 +54,8 @@ def run_generate_report(metrics_data):
     # print(rendered_latex[:1000] + "...\n--------------------")
 
 
-    # --- 3. Compile the rendered LaTeX to PDF ---
-    print("\nStep 3: Compiling LaTeX to PDF...")
+    # --- 5. Compile the rendered LaTeX to PDF ---
+    print("\nStep 5: Compiling LaTeX to PDF...")
     pdf_file_path = compile_latex_to_pdf(
         latex_content=rendered_latex,
         jobname=REPORT_JOBNAME,

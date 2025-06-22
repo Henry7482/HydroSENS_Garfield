@@ -203,5 +203,6 @@ report_data = {   'action_plan': [   'Implement efficient irrigation practices t
                 'negligible rainfall and stable temperature, suggesting a need for water management strategies and '
                 'soil conservation practices.',
     'time_period': '23 DEC 2024 - 27 JAN 2025',
-    'region_screenshot_path': 'assets/images/region_screenshot.png'}
+    'region_screenshot_path': 'assets/images/region_screenshot.png',
+    'trend': "Positive"}
 
