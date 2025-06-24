@@ -4,7 +4,7 @@ from .report_templating import render_latex_template
 from .latex_utils import compile_latex_to_pdf
 from .generate_content import generate_content
 from data.templates.mock_data import report_data
-
+from satellite_map_generator import generate_region_satellite_map, extract_coordinates_from_metrics
 
 def run_generate_report(metrics_data):
     # --- Configuration ---
@@ -25,11 +25,28 @@ def run_generate_report(metrics_data):
     Add image path to each metric datapoint by id (graph_image_path)
     """  
 
-    # --- 3. Generate region screenshot ---
-    """
-    Get coordinates from metric data (metrics_data.coordinates)
-    """
-
+    print("Step 3: Generating region satellite map...")
+        
+    # Extract coordinates from your metrics data
+    coordinates = extract_coordinates_from_metrics(metrics_data)
+    print(f"  Using coordinates: {coordinates[:2]}..." if len(coordinates) > 2 else f"  Using coordinates: {coordinates}")
+    
+    # Generate the satellite map (replaces your existing region screenshot)
+    success = generate_region_satellite_map(
+        coordinates=coordinates,
+        output_path="assets/images/region_screenshot.png",  # Same path as before
+        figsize=(12, 8),  # Adjust size as needed
+        alpha=0.5,        # Semi-transparent overlay
+        edge_color='#FF0000',  # Red border
+        face_color='#FFFF00',  # Yellow fill
+        line_width=3,
+        zoom='auto'       # Auto-detect zoom level
+    )
+    
+    if success:
+        print("  ✅ Region satellite map generated successfully")
+    else:
+        print("  ⚠️  Satellite map generation failed, but file may still exist")
 
 
     # --- 4. Render the LaTeX template ---
