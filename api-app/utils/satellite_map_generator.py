@@ -10,7 +10,7 @@ warnings.filterwarnings('ignore')
 
 def generate_region_satellite_map(coordinates, output_path="assets/images/region_screenshot.png", 
                                  figsize=(12, 10), alpha=0.6, 
-                                 edge_color='red', face_color='yellow',
+                                 edge_color='none', face_color='none',
                                  line_width=3, zoom='auto'):
     """
     Generate satellite map from coordinates and save to specified path
@@ -81,7 +81,7 @@ def generate_region_satellite_map(coordinates, output_path="assets/images/region
                 
                 # Add satellite basemap
                 ctx.add_basemap(ax, crs=gdf_mercator.crs, source=tile_provider, 
-                              zoom=zoom, attribution_size=8)
+                              zoom=zoom, attribution_size=0) # Bottom Left info, can't remove for some reasons
                 
                 basemap_added = True
                 print(f"  ✅ Successfully added satellite imagery")
@@ -101,7 +101,7 @@ def generate_region_satellite_map(coordinates, output_path="assets/images/region
             ax.grid(True, alpha=0.3, color='gray', linestyle='--', linewidth=0.5)
         
         # Customize the plot
-        ax.set_title('Region Overview', fontsize=16, fontweight='bold', pad=20)
+        # ax.set_title('Region Overview', fontsize=16, fontweight='bold', pad=20)
         ax.set_axis_off()  # Remove axes for cleaner view
         
         # Ensure tight layout
@@ -109,7 +109,7 @@ def generate_region_satellite_map(coordinates, output_path="assets/images/region
         
         # Save the map
         plt.savefig(output_path, dpi=300, bbox_inches='tight', 
-                   facecolor='white', edgecolor='none')
+                   facecolor='none', edgecolor='none')
         plt.close()
         
         print(f"  ✅ Region map saved to: {output_path}")
