@@ -37,8 +37,8 @@ def run_generate_report(metrics_data):
         output_path="assets/images/region_screenshot.png",  # Same path as before
         figsize=(12, 8),  # Adjust size as needed
         alpha=0.5,        # Semi-transparent overlay
-        edge_color='#FF0000',  # Red border
-        face_color='#FFFF00',  # Yellow fill
+        edge_color='none',  # Red border
+        face_color='none',  # Yellow fill
         line_width=3,
         zoom='auto'       # Auto-detect zoom level
     )
