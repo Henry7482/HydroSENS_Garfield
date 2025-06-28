@@ -10,7 +10,6 @@
 \usepackage{fontspec}
 \usepackage{setspace}
 \usepackage{tabularx}
-\usepackage{tikz}
 \usepackage[absolute,overlay]{textpos}
 \pgfplotsset{compat=1.18}
 
@@ -28,19 +27,19 @@
 
 % Load custom fonts
 \newfontfamily\titlefont[
-  Path = assets/fonts/,
+  Path = fonts/,
   UprightFont = JosefinSlab-Regular,
   BoldFont = JosefinSlab-Bold
 ]{Josefin Slab}
 
 \newfontfamily\subtitlefont[
-  Path = assets/fonts/,
+  Path = fonts/,
   UprightFont = LibreBaskerville-Regular,
   BoldFont = LibreBaskerville-Bold
 ]{Libre Baskerville}
 
 \newfontfamily\contentfont[
-  Path = assets/fonts/,
+  Path = fonts/,
   UprightFont = LibreBaskerville-Regular
 ]{Libre Baskerville}
 
@@ -79,7 +78,7 @@
 
 % Document begin
 \begin{document}
-% Title page
+% Intro start
 \begin{titlepage}
 \begin{center}
 \begin{minipage}{0.75\textwidth}
@@ -89,11 +88,11 @@
 \end{minipage}
 \hfill
 \begin{minipage}{0.15\textwidth}
-    \includegraphics[width=\linewidth]{assets/images/logo.png}
+    \includegraphics[width=\linewidth]{images/logo.png}
 \end{minipage}
 \end{center}
 
-% Separator line
+% Seperator line
 \vspace{0.5\baselineskip}
 \noindent\color{hydrosenscyan}\rule{0.25\textwidth}{3pt}
 \vspace{1\baselineskip}
@@ -107,13 +106,13 @@
 % Region and Time Period
 \noindent
 \HydroSubtitle{REGION:}
-\HydroContent{\VAR{ location | e }}
+\HydroContent{District 7 - Ho Chi Minh}
 
 \vspace{0.2cm}
 
 \noindent
 \HydroSubtitle{\textbf{TIME PERIOD:}}
-\HydroContent{\VAR{ time_period | e }}
+\HydroContent{10 Apr - 35 May 2025}
 
 \vfill
 
@@ -128,12 +127,15 @@
     \begin{scope}
         \clip (current page.south east) ++(-4cm, 4cm) circle (20cm); % Adjust position and size
         \node at ([xshift=-7cm, yshift=7cm]current page.south east)
-            {\includegraphics[width=20cm]{assets/images/intro.png}}; % Adjust image width
+            {\includegraphics[width=20cm]{images/intro.png}}; % Adjust image width
     \end{scope}
 \end{tikzpicture}
 \end{titlepage}
 
-% Overview Page
+
+% --- Overview Page ---
+
+% Overview Title
 \noindent
 \HydroTitle{OVERVIEW}
 
@@ -152,17 +154,17 @@
   \color{black}%
   \normalfont
   \fontsize{16pt}{20pt}\selectfont
-\VAR{ overview | e }
+This report provides a comprehensive assessment of six key environmental metrics—NDVI, Vegetation Fraction, Soil Moisture, Precipitation, Temperature, and Curve Number—for a selected geographic area over the course of 2024. The objective is to deliver intuitive insights into the region’s vegetation health, water balance, and climate dynamics, enabling both technical and non-technical stakeholders to make informed decisions.
 \par
 \endgroup
 
 \begin{tikzpicture}[remember picture, overlay]
     \node[anchor=south, yshift=1.5cm] at (current page.south) {
-        \includegraphics[width=\textwidth, height=50cm, keepaspectratio]{\VAR{ region_screenshot_path | e }};
+        \includegraphics[width=\textwidth, height=50cm, keepaspectratio]{images/region_screenshot.png}
     };
 \end{tikzpicture}
 
-% Key insights page
+% Key insights start
 \clearpage
 \noindent
 \begin{minipage}[t]{0.6\textwidth}
@@ -175,27 +177,41 @@
   \vspace{1\baselineskip}
 
   \setstretch{1.5}
-  \raggedright
-  \BLOCK{ for insight in key_insights }
-  \HydroContent{\textbf{\VAR{ loop.index }. \VAR{ insight.title | e }}\\
-  \VAR{ insight.detail | e }}
+  \HydroContent{\textbf{1. Healthy but Moderate Vegetation}\\
+  Vegetation indicators (NDVI and Vegetation Fraction) remained consistently moderate, peaking during spring and early summer.}
 
   \vspace{0.6cm}
-  \BLOCK{ endfor }
+
+  \HydroContent{\textbf{2. Adequate Soil Moisture}\\
+  Soil moisture levels were stable and adequate throughout the year, supporting consistent plant growth.}
+
+  \vspace{0.6cm}
+
+  \HydroContent{\textbf{3. Seasonal Rainfall Distribution}\\
+  Precipitation followed a clear seasonal pattern, with wetter periods in early autumn and late summer, and noticeably drier months during mid-year.}
+
+  \vspace{0.6cm}
+
+  \HydroContent{\textbf{4. Temperate Climate Patterns}\\
+  Average temperature hovered around 22°C with warm peaks early in the year and cooling mid-year, consistent with subtropical seasonal cycles.}
+
+  \vspace{0.6cm}
+
+  \HydroContent{\textbf{5. Moderate Runoff Risk}\\
+  Curve Number values indicate the area has mixed surface permeability—neither highly absorbent nor heavily sealed—suggesting }
 \end{minipage}%
 \hfill
 \begin{minipage}[t]{0.25\textwidth}
 % Background image on right half
 \begin{tikzpicture}[remember picture,overlay]
   \node[anchor=north east, inner sep=0pt] at (current page.north east)
-    {\includegraphics[height=\paperheight]{assets/images/waterfall.png}};
+    {\includegraphics[height=\paperheight]{images/waterfall.png}};
 \end{tikzpicture}
 
 \end{minipage}
 
-% Metric pages
-\BLOCK{ for metric in metrics }
-\BLOCK{ if metric.selected }
+\clearpage
+% Metric start (1 example)
 \clearpage
 % Top border line
 \vspace*{-0.5cm}
@@ -203,10 +219,10 @@
 \color{teal}\rule{\textwidth}{2pt}
 \vspace{0.3cm}
 
-% Header with page number
+% Header
 \noindent
 \begin{tabular*}{\textwidth}{@{\extracolsep{\fill}} l r }
-\textsf{\textbf{\small STATISTICS}} & \textsf{\textbf{\small PAGE \VAR{ "%02d"|format(loop.index + 4) }}} \\
+\textsf{\textbf{\small STATISTICS}} & \textsf{\textbf{\small PAGE 05}} \\
 \end{tabular*}
 
 \vspace{0.7cm}
@@ -214,7 +230,7 @@
 % Title and Mean Value aligned on the same line
 \noindent
 \begin{tabularx}{\textwidth}{@{}X r@{}}
-  \begin{minipage}[t]{0.5\textwidth}
+  \begin{minipage}[t]{0.65\textwidth}
 
 \begingroup
   \setstretch{1.5}%
@@ -222,26 +238,22 @@
   \color{hydrosensblue}%
   \fontsize{40pt}{30pt}
   \bfseries\selectfont
-  \noindent 
-  \raggedright  
-  \BLOCK{ set words = metric.title.upper().split() }
-  \BLOCK{ for word in words }\mbox{\VAR{word|e}}
-  \BLOCK{ if not loop.last } \BLOCK{ endif }\BLOCK{ endfor }
-
+  \noindent   
+NORMALIZED DIFFERENCE VEGETATION INDEX
+\par
 \endgroup
 
     \vspace{0.3cm}
-    \par \textit{\VAR{ metric.description | e }}
+    \par \textit{Indicates vegetation health from 0 to 1.}
   \end{minipage}
   &
-  \begin{minipage}[t]{0.4\textwidth}
-  {\subtitlefont\color{hydrosenscyan}\bfseries\fontsize{50pt}{40pt}\selectfont \VAR{ "%.2f"|format(metric.mean_value) | e }}\\[0.3cm]
+  \begin{minipage}[t]{0.35\textwidth}
+  {\subtitlefont\color{hydrosenscyan}\bfseries\fontsize{50pt}{40pt}\selectfont 0.36}\\[0.3cm]
     \HydroSubtitle{\textbf{MEAN VALUE}}\\[-0.3cm]
 
-\noindent\color{hydrosenscyan}\rule{5.2cm}{2pt}\\[0.3cm]
+\svnoindent\color{hydrosenscyan}\rule{5.2cm}{2pt}\\[0.3cm]
     \setstretch{1.5}
-    \raggedright
-    \HydroContent{\VAR{ metric.mean_insight | e }}
+    \HydroContent{An average NDVI of 0.36 suggests moderate vegetation density, indicating some vegetative activity but potentially below optimal levels.}
   \end{minipage}
 \end{tabularx}
 
@@ -258,13 +270,13 @@
     \vspace{0.3cm}
 
     \setstretch{1.5}
-    \HydroContent{\VAR{ metric.time_insight | e }}
+    \HydroContent{NDVI values fluctuated between 0.29 and 0.43 during the reporting period. An increase in early January suggests a positive response to environmental factors or management practices, followed by a gradual decline towards the end of January.}
   \end{minipage}
   &
   % Right column – image aligned top
   \begin{minipage}[t]{0.48\textwidth}
     \vspace{0pt}
-    \includegraphics[width=\linewidth]{\VAR{ metric.graph_image_path | e }}
+    \includegraphics[width=\linewidth]{images/metric.png}
   \end{minipage}
 \end{tabularx}
 
@@ -272,13 +284,10 @@
 
 % Bottom border line
 \noindent\color{teal}\rule{\textwidth}{2pt}
-
-\BLOCK{ endif }
-\BLOCK{ endfor }
-
-% Action Plans Page
+% Action start
 \newpage
 
+% Action Plans Page
 \vspace*{-0.5cm}
 \noindent\HydroTitle{ACTION PLANS}
 
@@ -291,18 +300,19 @@
 \setstretch{1.5}
 \color{black}
 \begin{itemize}[leftmargin=*, rightmargin=0pt] % Adjusts list margins
-    \BLOCK{ for action in action_plan }
-    \item \HydroContent{\VAR{ action | e }}
-    \BLOCK{ endfor }
+    \item \HydroContent{Implement efficient irrigation practices to address the lack of rainfall and ensure adequate water supply for vegetation.}
+    \item \HydroContent{Monitor soil moisture levels regularly and adjust irrigation strategies as needed.}
+    \item \HydroContent{Consider implementing soil conservation measures to minimize runoff potential and improve water infiltration.}
+    \item \HydroContent{Select drought-resistant vegetation species for future plantings to reduce water demand.}
+    \item \HydroContent{Conduct further investigation into the factors causing NDVI fluctuation and the runoff potential change.}
 \end{itemize}
 \end{minipage}
 
 % --- Image at the bottom of the page (no margins) ---
 \begin{tikzpicture}[remember picture,overlay]
     \node[anchor=south west, inner sep=0pt, outer sep=0pt] at (current page.south west) {
-        \includegraphics[width=\paperwidth,height=10cm]{assets/images/action.jpg} % Adjust height as needed
+        \includegraphics[width=\paperwidth,height=10cm]{images/action.jpg} % Adjust height as needed
     };
 \end{tikzpicture}
 % --- End of image block ---
-
 \end{document}

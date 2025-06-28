@@ -9,6 +9,7 @@ import tempfile
 import os
 from werkzeug.datastructures import FileStorage
 from io import BytesIO
+from data.templates.mock_data import report_data
 
 app = Flask(__name__)
 CORS(app, resources={r"/*": {"origins": "*"}})
@@ -160,11 +161,13 @@ def generate_report():
     if not json_data:
         return jsonify({"error": "CSV file not found or invalid"}), 404
     json_data['region'] = regionName
+    json_data['coordinates'] = coordinates
     print(json_data)
     
     try:
         # Run report generation and get the output PDF path
-        pdf_file_path = run_generate_report(json_data)
+        pdf_file_path = run_generate_report(json_data) # D
+        # pdf_file_path = run_generate_report(report_data)
 
         # Send the file to the user
         return send_file(
