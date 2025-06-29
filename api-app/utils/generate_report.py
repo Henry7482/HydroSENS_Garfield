@@ -5,6 +5,8 @@ from .latex_utils import compile_latex_to_pdf
 from .generate_content import generate_content
 from data.templates.mock_data import report_data
 from .satellite_map_generator import generate_region_satellite_map, extract_coordinates_from_metrics
+from .generate_graph import generate_graphs
+
 
 def run_generate_report(metrics_data):
     # --- Configuration ---
@@ -24,6 +26,14 @@ def run_generate_report(metrics_data):
     Use metrics_data to generate timeseries graphs, save as image in assets/graphs.
     Add image path to each metric datapoint by id (graph_image_path)
     """  
+    print("Step 2: Generating graphs...")
+    # This function should be defined in your utils/generate_graph.py
+    report_data = generate_graphs(metrics_data, report_data)
+    if not report_data:
+        print("No graphs generated, check metrics_data format.")
+    else:
+        print("Graphs generated successfully")
+
 
     print("Step 3: Generating region satellite map...")
         
@@ -42,11 +52,12 @@ def run_generate_report(metrics_data):
         line_width=3,
         zoom='auto'       # Auto-detect zoom level
     )
-    
+    report_data["region_screenshot_path"] = "assets/images/region_screenshot.png"  # Update report data with new screenshot path
+
     if success:
-        print("  ✅ Region satellite map generated successfully")
+        print("Region satellite map generated successfully")
     else:
-        print("  ⚠️  Satellite map generation failed, but file may still exist")
+        print("Satellite map generation failed, but file may still exist")
 
 
     # --- 4. Render the LaTeX template ---
@@ -79,7 +90,7 @@ def run_generate_report(metrics_data):
         output_dir=OUTPUT_DIR,
         use_latexmk=True, # Recommended
         latex_engine="xelatex", # latexmk will use this engine
-        assets_paths=None, # Pass paths to images, etc.
+        assets_paths=None,
         keep_tex_file=KEEP_TEX
     )
 
