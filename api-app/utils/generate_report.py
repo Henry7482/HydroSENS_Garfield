@@ -7,6 +7,7 @@ from data.templates.mock_data import report_data
 from .satellite_map_generator import generate_region_satellite_map, extract_coordinates_from_metrics
 from .generate_graph import generate_graphs
 
+
 def run_generate_report(metrics_data):
     # --- Configuration ---
     TEMPLATE_DIR = "/app/data/templates"  # Directory where the LaTeX template is stored
