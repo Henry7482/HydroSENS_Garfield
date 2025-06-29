@@ -114,7 +114,7 @@ def get_tif_zip():
     """Endpoint to retrieve the zipped TIF output."""
     data = request.get_json()
     if not data:
-        return  ({"error": "Invalid JSON payload"}), 400
+        return jsonify({"error": "Invalid JSON payload"}), 400
     regionName = data.get("region_name", "Unknown Region")
     startDate = data.get("start_date")
     endDate = data.get("end_date")
