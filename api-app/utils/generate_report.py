@@ -4,7 +4,7 @@ from .report_templating import render_latex_template
 from .latex_utils import compile_latex_to_pdf
 from .generate_content import generate_content
 from data.templates.mock_data import report_data
-from satellite_map_generator import generate_region_satellite_map, extract_coordinates_from_metrics
+from .satellite_map_generator import generate_region_satellite_map, extract_coordinates_from_metrics
 
 def run_generate_report(metrics_data):
     # --- Configuration ---
