@@ -1,5 +1,5 @@
 from flask import Flask, request, jsonify, send_file
-from  utils.generate_report import run_generate_report
+from utils.generate_report import run_generate_report
 from utils.helpers import generate_unique_key, generate_unique_file_path, get_json_from_csv
 import requests
 import os
@@ -109,12 +109,12 @@ def analyze():
         print(f"[analyze] Exception:", str(e))
         return jsonify({"error": str(e)}), 500
 
-@app.route('/analyze/export-tifs', methods=['GET'])
+@app.route('/analyze/export-tifs', methods=['POST'])
 def get_tif_zip():
     """Endpoint to retrieve the zipped TIF output."""
     data = request.get_json()
     if not data:
-        return jsonify({"error": "Invalid JSON payload"}), 400
+        return  ({"error": "Invalid JSON payload"}), 400
     regionName = data.get("region_name", "Unknown Region")
     startDate = data.get("start_date")
     endDate = data.get("end_date")
@@ -122,12 +122,13 @@ def get_tif_zip():
         return jsonify({"error": "Missing required parameters: region_name, start_date, end_date"}), 400
 
     zip_file_path = generate_unique_file_path(regionName, startDate, endDate, extension=".zip")
+    print('Getting tif files from:', zip_file_path)
     if not os.path.exists(zip_file_path):
         return jsonify({"error": "TIF ZIP file not found."}), 404
 
     return send_file(zip_file_path, mimetype='application/zip', as_attachment=True, download_name='tif_outputs.zip')
 
-@app.route('/analyze/export-csv', methods=['GET'])
+@app.route('/analyze/export-csv', methods=['POST'])
 def get_csv_file():
     """Endpoint to retrieve the CSV output file."""
     data = request.get_json()
