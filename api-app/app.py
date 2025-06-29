@@ -162,7 +162,6 @@ def generate_report():
         return jsonify({"error": "CSV file not found or invalid"}), 404
     json_data['region'] = regionName
     json_data['coordinates'] = coordinates
-    print(json_data)
     
     try:
         # Run report generation and get the output PDF path

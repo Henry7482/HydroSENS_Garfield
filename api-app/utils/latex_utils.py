@@ -64,6 +64,8 @@ def compile_latex_to_pdf(latex_content, jobname="report", output_dir="output",
         with open(tex_filepath_temp, "w", encoding="utf-8") as f:
             f.write(latex_content)
 
+        print("Current working directory:", os.getcwd())
+
         # Copy assets to the temporary compilation directory
         if assets_paths:
             for asset_path in assets_paths:

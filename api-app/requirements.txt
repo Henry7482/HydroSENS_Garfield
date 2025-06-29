@@ -8,3 +8,5 @@ Flask-Cors
 pyproj
 contextily
 numpy
+geopandas
+contextily
