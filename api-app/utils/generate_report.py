@@ -7,7 +7,7 @@ from .generate_content import generate_content
 from data.templates.mock_data import report_data
 from .satellite_map_generator import generate_region_satellite_map, extract_coordinates_from_metrics
 from .generate_graph import generate_graphs
-
+from .GEE_satellite_map_generator import generate_region_satellite_map_gee
 
 def run_generate_report(metrics_data):
     # --- Configuration ---
@@ -41,15 +41,24 @@ def run_generate_report(metrics_data):
         coordinates = extract_coordinates_from_metrics(metrics_data)
         print(f"Using coordinates: {coordinates[:2] if len(coordinates) > 2 else coordinates}")
         
-        success = generate_region_satellite_map(
+        # success = generate_region_satellite_map(
+        #     coordinates=coordinates,
+        #     output_path="/app/data/assets/images/region_screenshot.png",
+        #     edge_color='none',
+        #     face_color='none',
+        #     line_width=3,
+        #     zoom='auto'
+        # )
+
+        success = generate_region_satellite_map_gee(
             coordinates=coordinates,
             output_path="/app/data/assets/images/region_screenshot.png",
+            zoom_out_factor=4,
             edge_color='none',
             face_color='none',
-            line_width=3,
-            zoom='auto'
+            use_gee_first=True
         )
-        
+                        
         if success:
             print("Region satellite map generated successfully")
         else:
