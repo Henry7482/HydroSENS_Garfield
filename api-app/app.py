@@ -166,8 +166,8 @@ def generate_report():
     
     try:
         # Run report generation and get the output PDF path
-        pdf_file_path = run_generate_report(json_data) # D
-        # pdf_file_path = run_generate_report(report_data)
+        pdf_file_path = run_generate_report(json_data)
+        # pdf_file_path = run_generate_report(report_data) # DEMO ONLY
 
         # Send the file to the user
         return send_file(

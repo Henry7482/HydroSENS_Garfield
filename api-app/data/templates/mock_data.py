@@ -80,11 +80,8 @@ report_data = {   'action_plan': [   'Implement efficient irrigation practices t
                         {   'detail': 'Vegetation fraction is high (above 0.75) suggesting dense vegetation cover',
                             'title': 'High vegetation cover fraction'}],
     'location': 'Name_ABALOU Abla - Autre parcelle',
-    'metrics': [   {   'description': 'Indicates vegetation health from 0 to 1.',
+    'metrics': [   {   'description': 'Normalized difference vegitation index - The greenness and density of vegetation from 0 to 1.',
                        'id': 'ndvi',
-                       'mean_insight': 'An average NDVI of 0.36 suggests moderate vegetation density for Name_ABALOU '
-                                       'Abla - Autre parcelle, indicating some vegetative activity but potentially '
-                                       'below optimal levels.',
                        'mean_value': 0.36,
                        'selected': True,
                        'series': [   {'timestamp': '2024-12-23', 'value': 0.3311726052982869},
@@ -98,13 +95,16 @@ report_data = {   'action_plan': [   'Implement efficient irrigation practices t
                                        'There was an increase in NDVI in early January, followed by a gradual decline '
                                        'towards the end of January, suggesting a potential response to environmental '
                                        'conditions or management practices.',
-                       'title': 'NORMALIZED DIFFERENCE VEGETATION INDEX',
-                       'graph_image_path': 'assets/images/metric.png'},
+                       'title': 'NDVI',
+                       'graph_image_path': 'assets/images/metric.png',
+                        'trend': {
+                           "percent": 60.0,
+                           "uptrend": True
+                       }
+                    },
+
                    {   'description': 'Proportion of ground covered by vegetation.',
                        'id': 'vegetation_fraction',
-                       'mean_insight': 'An average vegetation fraction of 0.85 indicates a high proportion of ground '
-                                       'cover by vegetation in Name_ABALOU Abla - Autre parcelle, suggesting dense '
-                                       'vegetation.',
                        'mean_value': 0.85,
                        'selected': True,
                        'series': [   {'timestamp': '2024-12-23', 'value': 0.8305334428763211},
@@ -118,12 +118,14 @@ report_data = {   'action_plan': [   'Implement efficient irrigation practices t
                                        '0.92. There was a peak in mid-January, indicating a period of high vegetation '
                                        'cover, followed by a slight decrease towards the end of the month.',
                        'title': 'VEGETATION FRACTION',
-                       'graph_image_path': 'assets/images/metric.png'},
+                       'graph_image_path': 'assets/images/metric.png',
+                                              'trend': {
+                           "percent": 60.0,
+                           "uptrend": True
+                       }
+                    },
                    {   'description': 'Volumetric water content in the soil.',
                        'id': 'soil_fraction',
-                       'mean_insight': 'The average soil fraction of 0.11 indicates low water content in the soil of '
-                                       'Name_ABALOU Abla - Autre parcelle during the reporting period. This suggests '
-                                       'relatively dry soil conditions.',
                        'mean_value': 0.11,
                        'selected': True,
                        'series': [   {'timestamp': '2024-12-23', 'value': 0.026419354124047587},
@@ -139,12 +141,14 @@ report_data = {   'action_plan': [   'Implement efficient irrigation practices t
                                        'period, indicating a slow gain in the water content. Further monitoring would '
                                        'be needed.',
                        'title': 'SOIL FRACTION',
-                       'graph_image_path': 'assets/images/metric.png'},
+                       'graph_image_path': 'assets/images/metric.png',
+                        'trend': {
+                           "percent": 60.0,
+                           "uptrend": True
+                       }
+                    },
                    {   'description': 'Amount of rainfall in millimeters.',
                        'id': 'precipitation',
-                       'mean_insight': 'An average precipitation of 0 mm indicates virtually no rainfall in '
-                                       'Name_ABALOU Abla - Autre parcelle during the reporting period, which may cause '
-                                       'dry soil condition.',
                        'mean_value': 0.0,
                        'selected': True,
                        'series': [   {'timestamp': '2024-12-23', 'value': 1.1920928955078125e-10},
@@ -158,12 +162,14 @@ report_data = {   'action_plan': [   'Implement efficient irrigation practices t
                                        'reporting period, indicating very dry conditions. Irrigation strategies might '
                                        'be necessary to sustain vegetation.',
                        'title': 'PRECIPITATION',
-                       'graph_image_path': 'assets/images/metric.png'},
+                       'graph_image_path': 'assets/images/metric.png',
+                        'trend': {
+                           "percent": 60.0,
+                           "uptrend": True
+                       }
+                    },
                    {   'description': 'Average surface temperature in degrees Celsius.',
                        'id': 'temperature',
-                       'mean_insight': 'An average temperature of 29.30°C suggests warm conditions in Name_ABALOU Abla '
-                                       '- Autre parcelle during the reporting period, influencing vegetation growth '
-                                       'and water demand.',
                        'mean_value': 29.3,
                        'selected': True,
                        'series': [   {'timestamp': '2024-12-23', 'value': 29.295709228515648},
@@ -177,12 +183,14 @@ report_data = {   'action_plan': [   'Implement efficient irrigation practices t
                                        'period. This stable and warm temperature may be suitable for vegetation if '
                                        'water requirements are met.',
                        'title': 'TEMPERATURE',
-                       'graph_image_path': 'assets/images/metric.png'},
+                       'graph_image_path': 'assets/images/metric.png',
+                       'trend': {
+                           "percent": 60.0,
+                           "uptrend": False
+                       }
+                    },
                    {   'description': 'Runoff potential.',
                        'id': 'curve_number',
-                       'mean_insight': 'An average curve number of 70.03 indicates a moderate runoff potential in '
-                                       'Name_ABALOU Abla - Autre parcelle. This suggests that a moderate amount of '
-                                       'rainfall would result in surface runoff.',
                        'mean_value': 70.03,
                        'selected': True,
                        'series': [   {'timestamp': '2024-12-23', 'value': 70.89308553051583},
@@ -196,13 +204,18 @@ report_data = {   'action_plan': [   'Implement efficient irrigation practices t
                                        'approximately 65.87 to 78.70. The variation suggests differences in runoff '
                                        'potential depending on short-term changes.',
                        'title': 'CURVE NUMBER',
-                       'graph_image_path': 'assets/images/metric.png'}],
+                       'graph_image_path': 'assets/images/metric.png',
+                       'trend': {
+                           "percent": 60.0,
+                           "uptrend": True
+                       }
+                    }],
     'overview': 'This report analyzes environmental conditions in Name_ABALOU Abla - Autre parcelle from December 23, '
                 '2024, to January 27, 2025. The analysis includes NDVI, vegetation fraction, soil fraction, '
                 'precipitation, temperature, and curve number. The data indicates moderate vegetation health with '
                 'negligible rainfall and stable temperature, suggesting a need for water management strategies and '
                 'soil conservation practices.',
     'time_period': '23 DEC 2024 - 27 JAN 2025',
-    'region_screenshot_path': 'assets/images/region_screenshot.png',
-    'trend': "Positive"}
+    'region_screenshot_path': 'assets/images/region_screenshot.png'
+    }
 
