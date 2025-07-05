@@ -148,26 +148,26 @@ def get_csv_file():
 
 @app.route('/generate-report', methods=['POST'])
 def generate_report():
-    data = request.get_json()
-    if not data:
-        return jsonify({"error": "Invalid JSON payload"}), 400
-    regionName = data.get("region_name", "Unknown Region")
-    startDate = data.get("start_date")
-    endDate = data.get("end_date")
-    coordinates = data.get("coordinates", [])
-    if not regionName or not startDate or not endDate or not coordinates:
-        return jsonify({"error": "Missing required parameters"}), 400
-    csv_file_path = generate_unique_file_path(regionName, startDate, endDate, extension=".csv")
-    json_data = get_json_from_csv(csv_file_path)
-    if not json_data:
-        return jsonify({"error": "CSV file not found or invalid"}), 404
-    json_data['region'] = regionName
-    json_data['coordinates'] = coordinates
+    # data = request.get_json()
+    # if not data:
+    #     return jsonify({"error": "Invalid JSON payload"}), 400
+    # regionName = data.get("region_name", "Unknown Region")
+    # startDate = data.get("start_date")
+    # endDate = data.get("end_date")
+    # coordinates = data.get("coordinates", [])
+    # if not regionName or not startDate or not endDate or not coordinates:
+    #     return jsonify({"error": "Missing required parameters"}), 400
+    # csv_file_path = generate_unique_file_path(regionName, startDate, endDate, extension=".csv")
+    # json_data = get_json_from_csv(csv_file_path)
+    # if not json_data:
+    #     return jsonify({"error": "CSV file not found or invalid"}), 404
+    # json_data['region'] = regionName
+    # json_data['coordinates'] = coordinates
     
     try:
         # Run report generation and get the output PDF path
-        pdf_file_path = run_generate_report(json_data) # D
-        # pdf_file_path = run_generate_report(report_data)
+        # pdf_file_path = run_generate_report(json_data)
+        pdf_file_path = run_generate_report(report_data) # DEMO ONLY
 
         # Send the file to the user
         return send_file(

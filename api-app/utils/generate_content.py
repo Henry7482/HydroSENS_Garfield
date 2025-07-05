@@ -26,7 +26,7 @@ def generate_content(input_dict):
         curve_number = "curve_number"
 
     class MetricTitle(str, Enum):
-        ndvi = "NORMALIZED DIFFERENCE VEGETATION INDEX"
+        ndvi = "NDVI"
         vegetation_fraction = "VEGETATION FRACTION"
         soil_fraction = "SOIL FRACTION"
         precipitation = "PRECIPITATION"
@@ -35,7 +35,7 @@ def generate_content(input_dict):
 
 
     class MetricDescription(str, Enum):
-        ndvi = "Quantifies the greenness and density of vegetation from 0 to 1."
+        ndvi = "Normalized difference vegitation index - The greenness and density of vegetation from 0 to 1."
         vegetation_fraction = "Proportion of ground covered by vegetation."
         soil_fraction = "Proportion of exposed soil in a given area."
         precipitation = "Amount of rainfall in millimeters."
@@ -45,6 +45,10 @@ def generate_content(input_dict):
     class KeyInsight(BaseModel):
         title: str
         detail: str
+    
+    class Trend(BaseModel):
+        percent: float
+        uptrend: bool
 
     class Metric(BaseModel):
         id: MetricID
@@ -54,7 +58,7 @@ def generate_content(input_dict):
         mean_value: float
         mean_insight: str
         time_insight: str
-        trend: str
+        trend: Trend
 
     class ReportContent(BaseModel):
         location: str

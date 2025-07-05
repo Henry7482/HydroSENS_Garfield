@@ -4,7 +4,7 @@ services:
       context: ./hydrosens   # Folder where the HydroSENS Dockerfile is
     container_name: hydrosens
     ports:
-      - "5000:5000"           # Expose it to the host
+      - "5005:5005"           # Expose it to the host
     networks:
       - app-network
     environment:

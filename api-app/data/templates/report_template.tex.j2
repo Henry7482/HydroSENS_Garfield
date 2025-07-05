@@ -106,7 +106,7 @@
 
 % Region and Time Period
 \noindent
-\HydroSubtitle{REGION:}
+\HydroSubtitle{AREA OF INTEREST:}
 \HydroContent{\VAR{ location | e }}
 
 \vspace{0.2cm}
@@ -156,11 +156,11 @@
 \par
 \endgroup
 
-\begin{tikzpicture}[remember picture, overlay]
-    \node[anchor=south, yshift=1.5cm] at (current page.south) {
-        \includegraphics[width=\textwidth, height=50cm, keepaspectratio]{\VAR{ region_screenshot_path | e }};
-    };
-\end{tikzpicture}
+\begin{figure}[h!]
+    \centering
+    \includegraphics[width=\textwidth]{\VAR{ region_screenshot_path | e }}
+    \caption{\textit{Area of Interest}}
+\end{figure}
 
 % Key insights page
 \clearpage
@@ -201,75 +201,83 @@
 \vspace*{-0.5cm}
 \noindent
 \color{teal}\rule{\textwidth}{2pt}
-\vspace{0.3cm}
-
-% Header with page number
+\vspace{0.1cm}
+% Header
 \noindent
 \begin{tabular*}{\textwidth}{@{\extracolsep{\fill}} l r }
 \textsf{\textbf{\small STATISTICS}} & \textsf{\textbf{\small PAGE \VAR{ "%02d"|format(loop.index + 4) }}} \\
 \end{tabular*}
-
-\vspace{0.7cm}
-
-% Title and Mean Value aligned on the same line
-\noindent
-\begin{tabularx}{\textwidth}{@{}X r@{}}
-  \begin{minipage}[t]{0.5\textwidth}
-
+\vspace{0.2cm}
+% Title section
+\noindent 
+\begin{minipage}[t]{\textwidth}
 \begingroup
   \setstretch{1.5}%
   \titlefont
   \color{hydrosensblue}%
   \fontsize{40pt}{30pt}
   \bfseries\selectfont
-  \noindent 
-  \raggedright  
+  \noindent  
+\raggedright
   \BLOCK{ set words = metric.title.upper().split() }
   \BLOCK{ for word in words }\mbox{\VAR{word|e}}
   \BLOCK{ if not loop.last } \BLOCK{ endif }\BLOCK{ endfor }
-
+\par
 \endgroup
-
-    \vspace{0.3cm}
-    \par \textit{\VAR{ metric.description | e }}
-  \end{minipage}
-  &
-  \begin{minipage}[t]{0.4\textwidth}
-  {\subtitlefont\color{hydrosenscyan}\bfseries\fontsize{50pt}{40pt}\selectfont \VAR{ "%.2f"|format(metric.mean_value) | e }}\\[0.3cm]
-    \HydroSubtitle{\textbf{MEAN VALUE}}\\[-0.3cm]
-
-\noindent\color{hydrosenscyan}\rule{5.2cm}{2pt}\\[0.3cm]
-    \setstretch{1.5}
-    \raggedright
-    \HydroContent{\VAR{ metric.mean_insight | e }}
-  \end{minipage}
-\end{tabularx}
-
-\vspace{2cm}
-
-% Time series insight and chart image on same line
+\vspace{0.3cm}
+\par \textit{\VAR{ metric.description | e }}
+\end{minipage}
+\vspace{0.5cm}
+% Numbers section - Trend and Mean Value in a row
 \noindent
-\begin{tabularx}{\textwidth}{@{}X r@{}}
-  % Left column – Time Series Insight block, aligned top
-  \begin{minipage}[t]{0.48\textwidth}
-    \vspace{0pt} % ensure top alignment
-    \HydroSubtitle{TIME SERIES INSIGHT}\\[-0.5ex]
-    \noindent\color{hydrosenscyan}\rule{6cm}{2pt}
+\begin{tabularx}{\textwidth}{@{}X X@{}}
+  % Trend Section (Left)
+  \begin{minipage}[t]{0.45\textwidth}
+    {\subtitlefont\color{hydrosenscyan}\bfseries\fontsize{42pt}{32pt}\selectfont \VAR{ metric.trend.percent | e }\%}
+    \begin{tikzpicture}[baseline=(current bounding box.base)]
+      \BLOCK{ if metric.trend.uptrend }
+      % Up arrow for increasing trend
+      \draw[hydrosenscyan, line width=6pt, ->, >=stealth] (0,0) -- (0.45,0.65) -- (0.75,0.35) -- (1.2,1.1);
+      \BLOCK{ else }
+      % Down arrow for decreasing trend
+      \draw[hydrosenscyan, line width=6pt, ->, >=stealth] (0,1.1) -- (0.45,0.45) -- (0.75,0.75) -- (1.2,0);
+      \BLOCK{ endif }
+    \end{tikzpicture}\\[0.2cm]
+    \noindent\color{hydrosenscyan}\rule{5.2cm}{2pt}
     \vspace{0.3cm}
-
     \setstretch{1.5}
-    \HydroContent{\VAR{ metric.time_insight | e }}
+    \HydroSubtitle{\textbf{TREND}}\\[-0.3cm]
   \end{minipage}
   &
-  % Right column – image aligned top
-  \begin{minipage}[t]{0.48\textwidth}
-    \vspace{0pt}
-    \includegraphics[width=\linewidth]{\VAR{ metric.graph_image_path | e }}
+  % Mean Value Section (Right)
+  \begin{minipage}[t]{0.45\textwidth}
+    {\subtitlefont\color{hydrosenscyan}\bfseries\fontsize{42pt}{32pt}\selectfont \VAR{ "%.2f"|format(metric.mean_value) | e }}\\[0.2cm]
+    \noindent\color{hydrosenscyan}\rule{5.2cm}{2pt}\\[0.2cm]
+    \vspace{0.3cm}
+    \HydroSubtitle{\textbf{MEAN VALUE}}\\[-0.3cm]
+    \setstretch{1.5}
   \end{minipage}
 \end{tabularx}
+\vspace{0.7cm}
 
+% Chart section - full width
+\noindent
+\begin{figure}[h!]
+    \centering
+    \includegraphics[width=\textwidth]{\VAR{ metric.graph_image_path | e }}
+    \caption{{\VAR{ metric.title | e }} time series}
+\end{figure}
+\vspace{0.5cm}
+
+% Time Series Insight section - full width, below chart
+\noindent
+\begin{minipage}[t]{\textwidth}
+  \HydroSubtitle{TIME SERIES INSIGHT}\\[-0.5ex]
+  \noindent\color{hydrosenscyan}\rule{6cm}{2pt}\\[0.2cm]
+  \setstretch{1.5}
+  \HydroContent{\VAR{ metric.time_insight | e }}
+\end{minipage}
 \vfill
-
 % Bottom border line
 \noindent\color{teal}\rule{\textwidth}{2pt}
 
