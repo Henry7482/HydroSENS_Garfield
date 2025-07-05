@@ -86,11 +86,7 @@ def generate_content(input_dict):
             response_text = response.text  # This should be a JSON string
             try:
                 data = json.loads(response_text)  # Convert to Python dict
-            
-                # Write the dict  to a debug file
-                with open("debug_parsed_response.py", "w", encoding="utf-8") as debug_file:
-                    pprint.pprint(data, stream=debug_file, indent=4, width=120) # Use pprint to write the dict
-
+        
             except json.JSONDecodeError as e:
                 print("❌ Failed to decode JSON:", e)
             
