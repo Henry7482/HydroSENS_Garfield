@@ -29,7 +29,7 @@ def get_centroid_from_coordinates(coordinates):
     """
     Calculate centroid from coordinate array
     
-    Parameters:
+    Parameters:f
         coordinates: List of [lon, lat] pairs
     Returns:
         tuple: (centroid_lon, centroid_lat)
@@ -100,7 +100,7 @@ def get_ERA5_precip(aoi, start_date, end_date):
     # Convert list of dictionaries to a pandas DataFrame
     df = pd.DataFrame(data)
     df['date'] = pd.to_datetime(df['date'])  # Ensure date column is in datetime format
-
+    print('Total Prep: ', df['total_precipitation_m'])
     return df
 
 
