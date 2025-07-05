@@ -141,7 +141,7 @@ def run_hydrosens_endpoint():
                 "crs": crs,
                 "num_coordinates": len(coordinates)
             },
-            "results": results
+            "outputs": results
         }
         
         app.logger.info(f"Analysis completed. Results: {len(results) if results else 0} dates processed")

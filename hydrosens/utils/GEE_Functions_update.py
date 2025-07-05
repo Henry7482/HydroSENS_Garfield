@@ -100,7 +100,6 @@ def get_ERA5_precip(aoi, start_date, end_date):
     # Convert list of dictionaries to a pandas DataFrame
     df = pd.DataFrame(data)
     df['date'] = pd.to_datetime(df['date'])  # Ensure date column is in datetime format
-
     return df
 
 

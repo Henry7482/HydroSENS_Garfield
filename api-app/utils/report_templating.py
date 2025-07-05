@@ -32,10 +32,7 @@ def render_latex_template(template_file_path, data, template_dir="templates"):
 
     template = env.get_template(os.path.basename(template_file_path))
     rendered_latex = template.render(data)
-
-    # DEBUGGING TEX
-    with open('debug_output.tex', 'w') as f:
-        f.write(rendered_latex)
+    
     return rendered_latex
 
 def render_latex_from_string_template(latex_template_string, data):
