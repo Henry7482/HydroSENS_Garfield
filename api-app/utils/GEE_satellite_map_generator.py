@@ -26,12 +26,12 @@ def coordinates_to_ee_geometry(coordinates):
     
     return ee.Geometry.Polygon([coordinates])
 
-def get_satellite_image_from_gee(coordinates, output_path, image_size=1024, max_cloud_cover=20, zoom_out_factor=3):
+def get_satellite_image_from_gee(coordinates, output_path, image_size=2048, max_cloud_cover=20, zoom_out_factor=5):
     """
-    Get high-quality satellite imagery from Google Earth Engine with zoomed out view
+    Get high-quality satellite imagery from Google Earth Engine with proper zoom out for small regions
     """
     try:
-        print("  Getting zoomed out satellite imagery from Google Earth Engine...")
+        print("  Getting high-resolution satellite imagery from Google Earth Engine...")
         
         # Ensure output directory exists
         os.makedirs(os.path.dirname(output_path), exist_ok=True)
@@ -45,11 +45,19 @@ def get_satellite_image_from_gee(coordinates, output_path, image_size=1024, max_
         lat_range = coords[:, 1].max() - coords[:, 1].min()
         max_range = max(lon_range, lat_range)
         
+        # For very small regions, increase zoom out factor significantly
+        if max_range < 0.001:  # Very small region (< ~100m)
+            zoom_out_factor = 15
+        elif max_range < 0.01:  # Small region (< ~1km)
+            zoom_out_factor = 12
+        elif max_range < 0.05:  # Medium region (< ~5km)
+            zoom_out_factor = 8
+        
         # Create expanded region for zoom out
         center_lon = coords[:, 0].mean()
         center_lat = coords[:, 1].mean()
         
-        # Calculate expanded bounds
+        # Calculate expanded bounds with adaptive zoom factor
         expanded_range = max_range * zoom_out_factor
         half_range = expanded_range / 2
         
@@ -64,22 +72,23 @@ def get_satellite_image_from_gee(coordinates, output_path, image_size=1024, max_
         # Use expanded area for satellite image
         expanded_aoi = coordinates_to_ee_geometry(expanded_coords)
         
-        # Improved scale calculation to avoid pixelation
+        # Improved scale calculation for better resolution while showing context
         region_size_meters = expanded_range * 111000  # Rough conversion to meters
         
-        # Calculate scale to ensure good resolution
+        # Calculate scale to ensure good resolution but show enough context
         base_scale = region_size_meters / image_size
         
-        # Set minimum scale based on data source and ensure good quality
-        min_scales = {
-            'sentinel': 10,
-            'landsat': 30
-        }
-        
-        # For very small regions, ensure we don't go below sensor resolution
-        scale = max(base_scale, 10)  # Never go below 10m for good quality
+        # For small regions, use larger scale to show more context
+        # For very small regions, ensure we show enough surrounding area
+        if expanded_range < 0.01:  # Very zoomed out view
+            scale = max(base_scale, 20)  # Larger scale = more area covered
+        elif expanded_range < 0.1:  # Moderately zoomed out
+            scale = max(base_scale, 15)
+        else:
+            scale = max(base_scale, 10)  # Normal scale for larger regions
         
         print(f"    Using scale: {scale:.1f}m per pixel (zoom factor: {zoom_out_factor}x)")
+        print(f"    Image size: {image_size}x{image_size} pixels")
         print(f"    Expanded region size: {expanded_range:.4f} degrees")
         
         # Try multiple satellite data sources in order of preference
@@ -89,21 +98,24 @@ def get_satellite_image_from_gee(coordinates, output_path, image_size=1024, max_
                 'collection': 'COPERNICUS/S2_SR_HARMONIZED',
                 'bands': ['B4', 'B3', 'B2'],  # RGB
                 'scale': max(scale, 10),
-                'date_range': ('2020-01-01', '2024-12-31')
+                'date_range': ('2020-01-01', '2024-12-31'),
+                'vis_params': {'min': 0, 'max': 3000, 'gamma': 1.2}
             },
             {
                 'name': 'Landsat 8-9 (30m resolution)', 
                 'collection': 'LANDSAT/LC09/C02/T1_L2',
                 'bands': ['SR_B4', 'SR_B3', 'SR_B2'],  # RGB
                 'scale': max(scale, 30),
-                'date_range': ('2020-01-01', '2024-12-31')
+                'date_range': ('2020-01-01', '2024-12-31'),
+                'vis_params': {'min': 0, 'max': 2000, 'gamma': 1.2}
             },
             {
                 'name': 'Landsat 8 (30m resolution)',
                 'collection': 'LANDSAT/LC08/C02/T1_L2', 
                 'bands': ['SR_B4', 'SR_B3', 'SR_B2'],  # RGB
                 'scale': max(scale, 30),
-                'date_range': ('2015-01-01', '2024-12-31')
+                'date_range': ('2015-01-01', '2024-12-31'),
+                'vis_params': {'min': 0, 'max': 2000, 'gamma': 1.2}
             }
         ]
         
@@ -147,9 +159,7 @@ def get_satellite_image_from_gee(coordinates, output_path, image_size=1024, max_
                 # Create visualization parameters for RGB
                 vis_params = {
                     'bands': source['bands'],
-                    'min': 0,
-                    'max': 3000 if 'COPERNICUS' in source['collection'] else 2000,
-                    'gamma': 1.2
+                    **source['vis_params']
                 }
                 
                 # Get the image URL for download using expanded area
@@ -187,7 +197,7 @@ def get_satellite_image_from_gee(coordinates, output_path, image_size=1024, max_
 def add_overlay_to_image(image_path, original_coordinates, expanded_coordinates, 
                         edge_color='red', face_color='none', line_width=3, alpha=0.6):
     """
-    Add colored overlay to the satellite image
+    Add colored overlay to the satellite image with better line quality
     """
     try:
         print("  Adding colored overlay to satellite image...")
@@ -196,7 +206,7 @@ def add_overlay_to_image(image_path, original_coordinates, expanded_coordinates,
         img = Image.open(image_path).convert('RGBA')
         width, height = img.size
         
-        # Create overlay
+        # Create overlay with higher resolution for better line quality
         overlay = Image.new('RGBA', (width, height), (0, 0, 0, 0))
         draw = ImageDraw.Draw(overlay)
         
@@ -233,8 +243,14 @@ def add_overlay_to_image(image_path, original_coordinates, expanded_coordinates,
                 return (0, 255, 0, int(255 * alpha))
             elif color_str == 'yellow':
                 return (255, 255, 0, int(255 * alpha))
+            elif color_str == 'cyan':
+                return (0, 255, 255, int(255 * alpha))
+            elif color_str == 'magenta':
+                return (255, 0, 255, int(255 * alpha))
+            elif color_str == 'orange':
+                return (255, 165, 0, int(255 * alpha))
             else:
-                return (255, 0, 0, int(255 * alpha))  # Default to red
+                return (255, 0, 0, int(255 * alpha))
         
         # Draw filled polygon if face_color is not 'none'
         if face_color != 'none':
@@ -246,7 +262,7 @@ def add_overlay_to_image(image_path, original_coordinates, expanded_coordinates,
         if edge_color != 'none':
             outline_color = parse_color(edge_color)
             if outline_color:
-                # Make outline fully opaque
+                # Make outline fully opaque and thicker for better visibility
                 outline_color = outline_color[:3] + (255,)
                 draw.polygon(pixel_coords, outline=outline_color, width=line_width)
         
@@ -265,18 +281,18 @@ def add_overlay_to_image(image_path, original_coordinates, expanded_coordinates,
         return False
 
 def generate_region_satellite_map_gee(coordinates, output_path="assets/images/region_screenshot.png", 
-                                     figsize=(12, 10), alpha=0.6, 
+                                     figsize=(8, 6), alpha=0.6,  # Changed figsize for half A4
                                      edge_color='none', face_color='none',
                                      line_width=3, use_gee_first=True,
                                      add_padding=True, padding_factor=0.2,
-                                     zoom_out_factor=3):
+                                     zoom_out_factor=5):  # Increased default zoom out factor
     """
     Generate satellite map using Google Earth Engine first, with contextily fallback
-    Now properly adds colored overlays to GEE images
+    Now optimized for better resolution and half A4 page size
     """
     
     try:
-        print(f"Generating zoomed out satellite map for region...")
+        print(f"Generating high-resolution satellite map for region...")
         
         # Ensure output directory exists
         os.makedirs(os.path.dirname(output_path), exist_ok=True)
@@ -286,13 +302,13 @@ def generate_region_satellite_map_gee(coordinates, output_path="assets/images/re
         
         success = False
         
-        # Method 1: Try Google Earth Engine first with zoom out factor
+        # Method 1: Try Google Earth Engine first with improved settings
         if use_gee_first:
             print(f"Method 1: Trying Google Earth Engine (zoom out factor: {zoom_out_factor}x)...")
             success, expanded_coords, original_coords = get_satellite_image_from_gee(
                 coordinates=coords.tolist(),
                 output_path=output_path,
-                image_size=1024,
+                image_size=2048,  # Increased resolution
                 zoom_out_factor=zoom_out_factor
             )
             
@@ -329,7 +345,9 @@ def generate_region_satellite_map_gee(coordinates, output_path="assets/images/re
                 line_width=line_width
             )
         
+        # Resize image to half A4 dimensions if successful
         if success:
+            resize_image_for_half_a4(output_path)
             print(f"  Region satellite map saved to: {output_path}")
         else:
             print(f"  All satellite sources failed")
@@ -340,11 +358,60 @@ def generate_region_satellite_map_gee(coordinates, output_path="assets/images/re
         print(f"  Error generating satellite map: {e}")
         return False
 
-def generate_contextily_satellite_map(coordinates, output_path, figsize=(12, 10), 
+def resize_image_for_half_a4(image_path):
+    """
+    Resize image to appropriate dimensions for half A4 page
+    Half A4 at 300 DPI: ~1240x875 pixels
+    """
+    try:
+        print("  Resizing image for half A4 page...")
+        
+        # Open the image
+        img = Image.open(image_path)
+        
+        # Calculate dimensions for half A4 (landscape orientation)
+        # A4 is 210mm x 297mm, half A4 is roughly 148mm x 105mm
+        # At 300 DPI: 148mm = ~1748px, 105mm = ~1240px
+        target_width = 1240
+        target_height = 875
+        
+        # Resize maintaining aspect ratio, then crop to exact dimensions
+        img_ratio = img.width / img.height
+        target_ratio = target_width / target_height
+        
+        if img_ratio > target_ratio:
+            # Image is wider than target, fit to height
+            new_height = target_height
+            new_width = int(target_height * img_ratio)
+        else:
+            # Image is taller than target, fit to width
+            new_width = target_width
+            new_height = int(target_width / img_ratio)
+        
+        # Resize the image
+        img = img.resize((new_width, new_height), Image.Resampling.LANCZOS)
+        
+        # Crop to exact target dimensions (center crop)
+        left = (new_width - target_width) // 2
+        top = (new_height - target_height) // 2
+        right = left + target_width
+        bottom = top + target_height
+        
+        img = img.crop((left, top, right, bottom))
+        
+        # Save the resized image
+        img.save(image_path, 'PNG', quality=95, optimize=True)
+        
+        print(f"    Image resized to {target_width}x{target_height} pixels for half A4")
+        
+    except Exception as e:
+        print(f"    Error resizing image: {e}")
+
+def generate_contextily_satellite_map(coordinates, output_path, figsize=(8, 6), 
                                      alpha=0.6, edge_color='none', face_color='none',
                                      line_width=3):
     """
-    Generate satellite map using contextily (your existing method)
+    Generate satellite map using contextily with improved resolution
     """
     try:
         # Ensure polygon is closed
@@ -361,11 +428,11 @@ def generate_contextily_satellite_map(coordinates, output_path, figsize=(12, 10)
         # Reproject to Web Mercator (EPSG:3857) for contextily compatibility
         gdf_mercator = gdf.to_crs(epsg=3857)
         
-        # Calculate adaptive zoom
-        zoom = calculate_adaptive_zoom(coordinates)
+        # Calculate adaptive zoom with higher resolution
+        zoom = calculate_adaptive_zoom(coordinates, min_zoom=12, max_zoom=20)
         
-        # Create the plot
-        fig, ax = plt.subplots(figsize=figsize, facecolor='white')
+        # Create the plot with higher DPI
+        fig, ax = plt.subplots(figsize=figsize, facecolor='white', dpi=300)
         
         # Define satellite imagery providers
         providers_to_try = [
@@ -384,7 +451,7 @@ def generate_contextily_satellite_map(coordinates, output_path, figsize=(12, 10)
                     gdf_mercator.plot(ax=ax, alpha=alpha, color=face_color, 
                                     edgecolor=edge_color, linewidth=line_width)
                 
-                # Add satellite basemap
+                # Add satellite basemap with higher zoom
                 ctx.add_basemap(ax, crs=gdf_mercator.crs, source=tile_provider, 
                               zoom=zoom, attribution_size=0)
                 
@@ -400,7 +467,7 @@ def generate_contextily_satellite_map(coordinates, output_path, figsize=(12, 10)
         ax.set_axis_off()
         plt.tight_layout()
         
-        # Save the map
+        # Save the map with higher DPI
         plt.savefig(output_path, dpi=300, bbox_inches='tight', 
                    facecolor='none', edgecolor='none')
         plt.close()
@@ -411,9 +478,9 @@ def generate_contextily_satellite_map(coordinates, output_path, figsize=(12, 10)
         print(f"    Contextily generation failed: {e}")
         return False
 
-def calculate_adaptive_zoom(coordinates, min_zoom=10, max_zoom=18):
+def calculate_adaptive_zoom(coordinates, min_zoom=10, max_zoom=16):
     """
-    Calculate appropriate zoom level based on region size
+    Calculate appropriate zoom level based on region size - lower zoom shows more area
     """
     try:
         coords = np.array(coordinates)
@@ -434,19 +501,20 @@ def calculate_adaptive_zoom(coordinates, min_zoom=10, max_zoom=18):
         # Use the larger dimension for zoom calculation
         max_dimension = max(width_meters, height_meters)
         
-        # Adaptive zoom based on region size
-        if max_dimension < 200:
-            zoom = max_zoom
-        elif max_dimension < 500:
-            zoom = 17
-        elif max_dimension < 1000:
-            zoom = 16
-        elif max_dimension < 2000:
+        # For small regions, use LOWER zoom levels to show more context
+        # Lower zoom = more area visible, higher zoom = more detail but less area
+        if max_dimension < 50:    # Very small region (< 50m)
+            zoom = 14  # Show much more context
+        elif max_dimension < 100: # Small region (< 100m)
             zoom = 15
-        elif max_dimension < 5000:
-            zoom = 14
+        elif max_dimension < 500: # Medium-small region (< 500m)
+            zoom = 16
+        elif max_dimension < 1000: # Medium region (< 1km)
+            zoom = 17
+        elif max_dimension < 2000: # Large region (< 2km)
+            zoom = 18
         else:
-            zoom = min_zoom
+            zoom = max_zoom
         
         # Ensure zoom is within bounds
         zoom = max(min_zoom, min(max_zoom, zoom))
@@ -454,7 +522,7 @@ def calculate_adaptive_zoom(coordinates, min_zoom=10, max_zoom=18):
         return zoom
         
     except Exception as e:
-        return 15  # Safe default
+        return 13  # Lower default to show more context
 
 def add_region_padding(coordinates, padding_factor=0.2):
     """

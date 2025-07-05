@@ -54,7 +54,8 @@ def run_generate_report(metrics_data):
             coordinates=coordinates,
             output_path="/app/data/assets/images/region_screenshot.png",
             edge_color='red',
-            face_color='none',
+            face_color='blue',
+            alpha=0.1,
             use_gee_first=True
         )
                         
