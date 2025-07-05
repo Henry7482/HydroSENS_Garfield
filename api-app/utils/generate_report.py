@@ -1,12 +1,13 @@
 # generate_report.py
 import os
+import shutil
 from .report_templating import render_latex_template
 from .latex_utils import compile_latex_to_pdf
 from .generate_content import generate_content
 from data.templates.mock_data import report_data
 from .satellite_map_generator import generate_region_satellite_map, extract_coordinates_from_metrics
 from .generate_graph import generate_graphs
-
+from .GEE_satellite_map_generator import generate_region_satellite_map_gee
 
 def run_generate_report(metrics_data):
     # --- Configuration ---
@@ -36,28 +37,40 @@ def run_generate_report(metrics_data):
 
 
     print("Step 3: Generating region satellite map...")
+    try:
+        coordinates = extract_coordinates_from_metrics(metrics_data)
+        print(f"Using coordinates: {coordinates[:2] if len(coordinates) > 2 else coordinates}")
         
-    # Extract coordinates from your metrics data
-    coordinates = extract_coordinates_from_metrics(metrics_data)
-    print(f"  Using coordinates: {coordinates[:2]}..." if len(coordinates) > 2 else f"  Using coordinates: {coordinates}")
-    
-    # Generate the satellite map (replaces your existing region screenshot)
-    success = generate_region_satellite_map(
-        coordinates=coordinates,
-        output_path="assets/images/region_screenshot.png",  # Same path as before
-        figsize=(12, 8),  # Adjust size as needed
-        alpha=0.5,        # Semi-transparent overlay
-        edge_color='none',  # Red border
-        face_color='none',  # Yellow fill
-        line_width=3,
-        zoom='auto'       # Auto-detect zoom level
-    )
-    report_data["region_screenshot_path"] = "assets/images/region_screenshot.png"  # Update report data with new screenshot path
+        # success = generate_region_satellite_map(
+        #     coordinates=coordinates,
+        #     output_path="/app/data/assets/images/region_screenshot.png",
+        #     edge_color='none',
+        #     face_color='none',
+        #     line_width=3,
+        #     zoom='auto'
+        # )
 
-    if success:
-        print("Region satellite map generated successfully")
-    else:
-        print("Satellite map generation failed, but file may still exist")
+        success = generate_region_satellite_map_gee(
+            coordinates=coordinates,
+            output_path="/app/data/assets/images/region_screenshot.png",
+            edge_color='cyan',
+            face_color='blue',
+            alpha=0.05,
+            use_gee_first=True
+        )
+                        
+        if success:
+            print("Region satellite map generated successfully")
+        else:
+            print("Satellite map generation failed, creating fallback...")
+            create_fallback_region_image("/app/data/assets/images/region_screenshot.png")
+        
+        report_data["region_screenshot_path"] = "/app/data/assets/images/region_screenshot.png"
+
+    except Exception as e:
+        print(f"Error in satellite map generation: {e}")
+        create_fallback_region_image("/app/data/assets/images/region_screenshot.png")
+        report_data["region_screenshot_path"] = "/app/data/assets/images/region_screenshot.png"
 
 
     # --- 4. Render the LaTeX template ---
