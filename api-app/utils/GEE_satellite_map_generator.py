@@ -47,11 +47,11 @@ def get_satellite_image_from_gee(coordinates, output_path, image_size=2048, max_
         
         # For very small regions, increase zoom out factor significantly
         if max_range < 0.001:  # Very small region (< ~100m)
-            zoom_out_factor = 15
+            zoom_out_factor = 6
         elif max_range < 0.01:  # Small region (< ~1km)
-            zoom_out_factor = 12
-        elif max_range < 0.05:  # Medium region (< ~5km)
             zoom_out_factor = 8
+        elif max_range < 0.05:  # Medium region (< ~5km)
+            zoom_out_factor = 10
         
         # Create expanded region for zoom out
         center_lon = coords[:, 0].mean()
@@ -78,14 +78,16 @@ def get_satellite_image_from_gee(coordinates, output_path, image_size=2048, max_
         # Calculate scale to ensure good resolution but show enough context
         base_scale = region_size_meters / image_size
         
-        # For small regions, use larger scale to show more context
-        # For very small regions, ensure we show enough surrounding area
-        if expanded_range < 0.01:  # Very zoomed out view
-            scale = max(base_scale, 20)  # Larger scale = more area covered
+        # For small regions, use SMALLER scale to show MORE DETAIL (zoom in)
+        # Smaller scale = higher resolution, more detail
+        if expanded_range < 0.005:  # Small regions like yours - ZOOM IN
+            scale = max(base_scale, 2)   # High detail - 5m per pixel
+        elif expanded_range < 0.01:  # Very small regions
+            scale = max(base_scale, 4)   # Good detail
         elif expanded_range < 0.1:  # Moderately zoomed out
-            scale = max(base_scale, 15)
+            scale = max(base_scale, 6)
         else:
-            scale = max(base_scale, 10)  # Normal scale for larger regions
+            scale = max(base_scale, 8)  # Normal scale for larger regions
         
         print(f"    Using scale: {scale:.1f}m per pixel (zoom factor: {zoom_out_factor}x)")
         print(f"    Image size: {image_size}x{image_size} pixels")
@@ -250,7 +252,7 @@ def add_overlay_to_image(image_path, original_coordinates, expanded_coordinates,
             elif color_str == 'orange':
                 return (255, 165, 0, int(255 * alpha))
             else:
-                return (255, 0, 0, int(255 * alpha))
+                return (255, 0, 0, int(255 * alpha))  # Default to red
         
         # Draw filled polygon if face_color is not 'none'
         if face_color != 'none':
@@ -284,7 +286,7 @@ def generate_region_satellite_map_gee(coordinates, output_path="assets/images/re
                                      figsize=(8, 6), alpha=0.6,  # Changed figsize for half A4
                                      edge_color='none', face_color='none',
                                      line_width=3, use_gee_first=True,
-                                     add_padding=True, padding_factor=0.2,
+                                     add_padding=True, padding_factor=0.1,
                                      zoom_out_factor=5):  # Increased default zoom out factor
     """
     Generate satellite map using Google Earth Engine first, with contextily fallback
@@ -373,7 +375,7 @@ def resize_image_for_half_a4(image_path):
         # A4 is 210mm x 297mm, half A4 is roughly 148mm x 105mm
         # At 300 DPI: 148mm = ~1748px, 105mm = ~1240px
         target_width = 1240
-        target_height = 875
+        target_height = 950
         
         # Resize maintaining aspect ratio, then crop to exact dimensions
         img_ratio = img.width / img.height
@@ -504,15 +506,15 @@ def calculate_adaptive_zoom(coordinates, min_zoom=10, max_zoom=16):
         # For small regions, use LOWER zoom levels to show more context
         # Lower zoom = more area visible, higher zoom = more detail but less area
         if max_dimension < 50:    # Very small region (< 50m)
-            zoom = 14  # Show much more context
+            zoom = 10  # Show much more context
         elif max_dimension < 100: # Small region (< 100m)
-            zoom = 15
+            zoom = 11
         elif max_dimension < 500: # Medium-small region (< 500m)
-            zoom = 16
+            zoom = 12
         elif max_dimension < 1000: # Medium region (< 1km)
-            zoom = 17
+            zoom = 13
         elif max_dimension < 2000: # Large region (< 2km)
-            zoom = 18
+            zoom = 14
         else:
             zoom = max_zoom
         
