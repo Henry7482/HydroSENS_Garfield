@@ -8,11 +8,10 @@ from shapely.geometry import Polygon
 import warnings
 import os
 import tempfile
-from PIL import Image
+from PIL import Image, ImageDraw
 
 warnings.filterwarnings('ignore')
 
-# Initialize Earth Engine (you already have this)
 service_account = 'khoabui@hydrosens-garfield.iam.gserviceaccount.com'
 credentials = ee.ServiceAccountCredentials(service_account, r"./.secret/hydrosens-garfield-f6fe24f0d188.json")
 ee.Initialize(credentials)
@@ -30,23 +29,6 @@ def coordinates_to_ee_geometry(coordinates):
 def get_satellite_image_from_gee(coordinates, output_path, image_size=1024, max_cloud_cover=20, zoom_out_factor=3):
     """
     Get high-quality satellite imagery from Google Earth Engine with zoomed out view
-    
-    Parameters:
-    -----------
-    coordinates : list
-        List of [longitude, latitude] coordinate pairs
-    output_path : str
-        Path where to save the satellite image
-    image_size : int
-        Output image size in pixels (1024 = high quality)
-    max_cloud_cover : int
-        Maximum cloud coverage percentage
-    zoom_out_factor : float
-        How much to zoom out (higher = more zoomed out, default=3)
-        
-    Returns:
-    --------
-    bool : True if successful, False otherwise
     """
     try:
         print("  Getting zoomed out satellite imagery from Google Earth Engine...")
@@ -55,7 +37,7 @@ def get_satellite_image_from_gee(coordinates, output_path, image_size=1024, max_
         os.makedirs(os.path.dirname(output_path), exist_ok=True)
         
         # Convert coordinates to EE geometry
-        aoi = coordinates_to_ee_geometry(coordinates)
+        original_aoi = coordinates_to_ee_geometry(coordinates)
         
         # Calculate region dimensions for scale
         coords = np.array(coordinates)
@@ -63,24 +45,42 @@ def get_satellite_image_from_gee(coordinates, output_path, image_size=1024, max_
         lat_range = coords[:, 1].max() - coords[:, 1].min()
         max_range = max(lon_range, lat_range)
         
-        # Force larger scale for more zoomed out view
-        # Convert degrees to approximate meters and apply zoom out factor
-        region_size_meters = max_range * 111000  # Rough conversion to meters
-        scale = max(30, region_size_meters / (image_size / zoom_out_factor))
+        # Create expanded region for zoom out
+        center_lon = coords[:, 0].mean()
+        center_lat = coords[:, 1].mean()
         
-        # Ensure minimum scale based on zoom out factor
-        min_scale_by_zoom = {
-            1: 10,   # Normal zoom
-            2: 20,   # 2x zoomed out
-            3: 30,   # 3x zoomed out  
-            4: 50,   # 4x zoomed out
-            5: 100   # 5x zoomed out
+        # Calculate expanded bounds
+        expanded_range = max_range * zoom_out_factor
+        half_range = expanded_range / 2
+        
+        expanded_coords = [
+            [center_lon - half_range, center_lat - half_range],
+            [center_lon - half_range, center_lat + half_range],
+            [center_lon + half_range, center_lat + half_range],
+            [center_lon + half_range, center_lat - half_range],
+            [center_lon - half_range, center_lat - half_range]
+        ]
+        
+        # Use expanded area for satellite image
+        expanded_aoi = coordinates_to_ee_geometry(expanded_coords)
+        
+        # Improved scale calculation to avoid pixelation
+        region_size_meters = expanded_range * 111000  # Rough conversion to meters
+        
+        # Calculate scale to ensure good resolution
+        base_scale = region_size_meters / image_size
+        
+        # Set minimum scale based on data source and ensure good quality
+        min_scales = {
+            'sentinel': 10,
+            'landsat': 30
         }
         
-        min_scale = min_scale_by_zoom.get(int(zoom_out_factor), 30)
-        scale = max(scale, min_scale)
+        # For very small regions, ensure we don't go below sensor resolution
+        scale = max(base_scale, 10)  # Never go below 10m for good quality
         
-        print(f"    Using zoomed out scale: {scale}m per pixel (zoom factor: {zoom_out_factor}x)")
+        print(f"    Using scale: {scale:.1f}m per pixel (zoom factor: {zoom_out_factor}x)")
+        print(f"    Expanded region size: {expanded_range:.4f} degrees")
         
         # Try multiple satellite data sources in order of preference
         satellite_sources = [
@@ -115,14 +115,14 @@ def get_satellite_image_from_gee(coordinates, output_path, image_size=1024, max_
                 if 'COPERNICUS' in source['collection']:
                     # Sentinel-2
                     collection = ee.ImageCollection(source['collection']) \
-                        .filterBounds(aoi) \
+                        .filterBounds(expanded_aoi) \
                         .filterDate(source['date_range'][0], source['date_range'][1]) \
                         .filter(ee.Filter.lte('CLOUDY_PIXEL_PERCENTAGE', max_cloud_cover)) \
                         .sort('CLOUDY_PIXEL_PERCENTAGE')
                 else:
                     # Landsat
                     collection = ee.ImageCollection(source['collection']) \
-                        .filterBounds(aoi) \
+                        .filterBounds(expanded_aoi) \
                         .filterDate(source['date_range'][0], source['date_range'][1]) \
                         .filter(ee.Filter.lte('CLOUD_COVER', max_cloud_cover)) \
                         .sort('CLOUD_COVER')
@@ -152,9 +152,9 @@ def get_satellite_image_from_gee(coordinates, output_path, image_size=1024, max_
                     'gamma': 1.2
                 }
                 
-                # Get the image URL for download
+                # Get the image URL for download using expanded area
                 url = image.getThumbURL({
-                    'region': aoi,
+                    'region': expanded_aoi,
                     'dimensions': image_size,
                     'format': 'png',
                     **vis_params
@@ -168,7 +168,7 @@ def get_satellite_image_from_gee(coordinates, output_path, image_size=1024, max_
                         f.write(response.content)
                     
                     print(f"    Successfully downloaded satellite image from {source['name']}")
-                    return True
+                    return True, expanded_coords, coordinates
                 else:
                     print(f"      Failed to download from {source['name']}: HTTP {response.status_code}")
                     continue
@@ -178,10 +178,90 @@ def get_satellite_image_from_gee(coordinates, output_path, image_size=1024, max_
                 continue
         
         print("    All GEE satellite sources failed")
-        return False
+        return False, None, None
         
     except Exception as e:
         print(f"    GEE satellite image generation failed: {e}")
+        return False, None, None
+
+def add_overlay_to_image(image_path, original_coordinates, expanded_coordinates, 
+                        edge_color='red', face_color='none', line_width=3, alpha=0.6):
+    """
+    Add colored overlay to the satellite image
+    """
+    try:
+        print("  Adding colored overlay to satellite image...")
+        
+        # Open the image
+        img = Image.open(image_path).convert('RGBA')
+        width, height = img.size
+        
+        # Create overlay
+        overlay = Image.new('RGBA', (width, height), (0, 0, 0, 0))
+        draw = ImageDraw.Draw(overlay)
+        
+        # Convert coordinates to pixel coordinates
+        expanded_coords = np.array(expanded_coordinates[:-1])  # Remove duplicate last point
+        original_coords = np.array(original_coordinates[:-1] if original_coordinates[0] == original_coordinates[-1] 
+                                  else original_coordinates)
+        
+        # Calculate bounds
+        exp_lon_min, exp_lat_min = expanded_coords.min(axis=0)
+        exp_lon_max, exp_lat_max = expanded_coords.max(axis=0)
+        
+        # Convert original coordinates to pixel coordinates
+        pixel_coords = []
+        for lon, lat in original_coords:
+            # Normalize to 0-1
+            x_norm = (lon - exp_lon_min) / (exp_lon_max - exp_lon_min)
+            y_norm = 1 - (lat - exp_lat_min) / (exp_lat_max - exp_lat_min)  # Flip Y axis
+            
+            # Convert to pixel coordinates
+            x_pixel = int(x_norm * width)
+            y_pixel = int(y_norm * height)
+            pixel_coords.append((x_pixel, y_pixel))
+        
+        # Parse colors
+        def parse_color(color_str):
+            if color_str == 'none':
+                return None
+            elif color_str == 'red':
+                return (255, 0, 0, int(255 * alpha))
+            elif color_str == 'blue':
+                return (0, 0, 255, int(255 * alpha))
+            elif color_str == 'green':
+                return (0, 255, 0, int(255 * alpha))
+            elif color_str == 'yellow':
+                return (255, 255, 0, int(255 * alpha))
+            else:
+                return (255, 0, 0, int(255 * alpha))  # Default to red
+        
+        # Draw filled polygon if face_color is not 'none'
+        if face_color != 'none':
+            fill_color = parse_color(face_color)
+            if fill_color:
+                draw.polygon(pixel_coords, fill=fill_color)
+        
+        # Draw outline if edge_color is not 'none'
+        if edge_color != 'none':
+            outline_color = parse_color(edge_color)
+            if outline_color:
+                # Make outline fully opaque
+                outline_color = outline_color[:3] + (255,)
+                draw.polygon(pixel_coords, outline=outline_color, width=line_width)
+        
+        # Composite the overlay onto the original image
+        img = Image.alpha_composite(img, overlay)
+        
+        # Convert back to RGB and save
+        img = img.convert('RGB')
+        img.save(image_path, 'PNG', quality=95)
+        
+        print(f"    Overlay added successfully")
+        return True
+        
+    except Exception as e:
+        print(f"    Error adding overlay: {e}")
         return False
 
 def generate_region_satellite_map_gee(coordinates, output_path="assets/images/region_screenshot.png", 
@@ -192,35 +272,7 @@ def generate_region_satellite_map_gee(coordinates, output_path="assets/images/re
                                      zoom_out_factor=3):
     """
     Generate satellite map using Google Earth Engine first, with contextily fallback
-    
-    Parameters:
-    -----------
-    coordinates : list or array
-        List of [longitude, latitude] coordinate pairs
-    output_path : str
-        Path where to save the generated map image
-    figsize : tuple
-        Figure size (width, height) in inches
-    alpha : float
-        Transparency of the region overlay (0-1)
-    edge_color : str
-        Color of the region border
-    face_color : str
-        Fill color of the region
-    line_width : int
-        Width of the region border
-    use_gee_first : bool
-        Whether to try Google Earth Engine first
-    add_padding : bool
-        Whether to add padding around small regions
-    padding_factor : float
-        How much padding to add (0.2 = 20% of region size)
-    zoom_out_factor : float
-        How much to zoom out for more context (higher = more zoomed out)
-    
-    Returns:
-    --------
-    bool : True if successful, False otherwise
+    Now properly adds colored overlays to GEE images
     """
     
     try:
@@ -232,27 +284,41 @@ def generate_region_satellite_map_gee(coordinates, output_path="assets/images/re
         # Convert coordinates to numpy array
         coords = np.array(coordinates)
         
-        # Add padding for very small regions if requested
-        if add_padding:
-            original_coords = coords.copy()
-            coords = add_region_padding(coords, padding_factor)
-            print(f"  Added {padding_factor*100}% padding to region")
-        
         success = False
         
         # Method 1: Try Google Earth Engine first with zoom out factor
         if use_gee_first:
             print(f"Method 1: Trying Google Earth Engine (zoom out factor: {zoom_out_factor}x)...")
-            success = get_satellite_image_from_gee(
+            success, expanded_coords, original_coords = get_satellite_image_from_gee(
                 coordinates=coords.tolist(),
                 output_path=output_path,
                 image_size=1024,
                 zoom_out_factor=zoom_out_factor
             )
+            
+            # Add overlay if GEE was successful and overlay is requested
+            if success and (edge_color != 'none' or face_color != 'none'):
+                overlay_success = add_overlay_to_image(
+                    image_path=output_path,
+                    original_coordinates=original_coords,
+                    expanded_coordinates=expanded_coords,
+                    edge_color=edge_color,
+                    face_color=face_color,
+                    line_width=line_width,
+                    alpha=alpha
+                )
+                if not overlay_success:
+                    print("  Warning: Failed to add overlay to GEE image")
         
         # Method 2: Fallback to contextily if GEE fails
         if not success:
             print("Method 2: Falling back to contextily providers...")
+            
+            # Add padding for very small regions if requested
+            if add_padding:
+                coords = add_region_padding(coords, padding_factor)
+                print(f"  Added {padding_factor*100}% padding to region")
+            
             success = generate_contextily_satellite_map(
                 coordinates=coords,
                 output_path=output_path,
