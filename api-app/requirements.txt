@@ -9,5 +9,11 @@ pyproj
 contextily
 numpy
 geopandas
-contextily
-
+ee
+geemap
+matplotlib
+shapely
+pillow
+pandas
+fiona
+rasterio
