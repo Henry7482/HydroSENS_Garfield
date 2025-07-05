@@ -53,9 +53,9 @@ def run_generate_report(metrics_data):
         success = generate_region_satellite_map_gee(
             coordinates=coordinates,
             output_path="/app/data/assets/images/region_screenshot.png",
-            edge_color='red',
+            edge_color='cyan',
             face_color='blue',
-            alpha=0.02,
+            alpha=0.05,
             use_gee_first=True
         )
                         
