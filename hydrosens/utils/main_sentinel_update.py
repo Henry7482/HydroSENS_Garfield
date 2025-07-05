@@ -439,14 +439,15 @@ def process_dates(start_date, end_date, aoi, output_master, amc, p, coordinates,
             "curve-number": nan_to_zero(data['curve_number'][i])
         }
 
+
     df = pd.DataFrame(data)
     df = df[
-    (df[['veg_mean', 'soil_mean', 'curve_number', 'ndvi', 'temperature']] != 0).all(axis=1)
+    df[['veg_mean', 'soil_mean', 'curve_number',
+        'ndvi', 'temperature', 'precipitation']].notna().all(axis=1)
     ]
-    
+
     # Create a filename based on coordinates (using first coordinate as identifier)
     coord_id = f"coords_{coordinates[0][0]:.3f}_{coordinates[0][1]:.3f}"
-    print("Output master: ", output_master)
     output_csv = os.path.join(output_master, "output" + '.csv')
 
     df.to_csv(output_csv, index=False)

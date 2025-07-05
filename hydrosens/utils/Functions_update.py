@@ -116,7 +116,6 @@ def get_temp(coordinates, df):
 
 def CDS_precip(date, output):
 
-
     year = str(date.year)
     month = str(date.month).zfill(2)
     day = str(date.day).zfill(2)
