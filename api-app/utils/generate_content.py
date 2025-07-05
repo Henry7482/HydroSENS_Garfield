@@ -148,18 +148,21 @@ You will receive environmental data in a JSON structure similar to the following
 Your job is to generate the report's content and fit them into the provided json schema. The data includes:
 - location: The "region" value from the input data. Ideally at least 2 geographical identifiers in the name. For example: "DISTRICT 7 - HO CHI MINH"
 - time_period: The start and end date as a string. For example: "10 APR - 35 MAY 2025"
-- overview: Provide a concise summary of the overall environmental conditions and notable changes observed during the reporting period based on the input data. Highlight the general state of vegetation and water factors. Include the region and time period analyzed, the metrics included in the analysis, and the suggestions related to the action plan.
-- key_insights: List the most significant findings or trends observed across the different metrics. Each insight should be a brief, actionable statement in a [{"title": Category, "detail": Insight Description}] json format (e.g., [{"title": "Healthy but Moderate Vegetation", "NDVI showed a slight decline towards the end of the period."}, {"title": "Seasonal Rainfall Distribution", "Precipitation remained negligible throughout the reporting period."}]).
+- overview: Provide a concise summary of the overall environmental conditions and notable changes observed during the reporting period based on the input data. Highlight the general state of vegetation and water factors. Include the region and time period analyzed, the metrics included in the analysis, and the suggestions related to the action plan. Limit the content by 80 words.
+- key_insights: List the most significant findings or trends observed across the different metrics. Each insight should be in a [{"title": Category, "detail": Insight Description}] json format (e.g., [{"title": "Healthy but Moderate Vegetation", "Vegetation indicators (NDVI and Vegetation Fraction) remained consistently moderate,peaking during spring and early summer."}, {"title": "Seasonal Rainfall Distribution", "Precipitation followed a clear seasonal
+pattern, with wetter periods in early autumn
+and late summer, and noticeably drier
+months during mid-year"}]). Limit number of insights to 5, with each insight's title max at 4 words and it's description at 15 words.
 - metrics: For each selected metric present in the input data ('ndvi', 'vegetation_fraction', 'soil-fraction', 'precipitation', 'temperature', and 'curve_number'):
 - mean_value: Calculate the average value of the metric across all dates in the input data. Round up to 2 decimals.
-- mean_insight: Interpret the calculated mean value. What does this average value suggest about the condition (e.g., "An average NDVI of X suggests moderate vegetation density," "An average curve number of Y indicates typical runoff potential for this area"). Relate it to the region's context if possible.
-- time_insight: Analyze each metric value through the given time period and write a short paragraph of the time series insight gathered from the data. 
-- action_plan: write a action plan as a list of potential action items that the stakeholers can take based on all the insights of the report.
-- trend: A word to capture the trend of the time series if the metric.
+- time_insight: Interpret the calculated mean value. What does this average value suggest about the condition (e.g., "An average NDVI of X suggests moderate vegetation density"). Then analyze each metric value through the given time period and write into a short paragraph of the time series insight gathered from the data. Relate it to the region's context if possible. Keep the paragraph 80 words max. 
+- action_plan: Write an action plan as a list of potential action items that the stakeholers can take based on all the insights of the report. Keep the list at 7 points max, with 20 words limit for each point.
+- trend: The overall trend based on the metric value in percentage. For example: {"percent": 60.1, "uptrend": true}. If the trend is zero you can set "uptrend" as true.
 
 **Input Data:**
 Here is the input data you will analyze
 """
 
-
-generate_content(content_gen_input)
+# For demo
+if __name__ == "__main__":
+    generate_content(content_gen_input)
