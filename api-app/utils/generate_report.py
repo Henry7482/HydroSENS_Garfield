@@ -63,14 +63,11 @@ def run_generate_report(metrics_data):
             print("Region satellite map generated successfully")
         else:
             print("Satellite map generation failed, creating fallback...")
-            create_fallback_region_image("/app/data/assets/images/region_screenshot.png")
         
         report_data["region_screenshot_path"] = "/app/data/assets/images/region_screenshot.png"
 
     except Exception as e:
         print(f"Error in satellite map generation: {e}")
-        create_fallback_region_image("/app/data/assets/images/region_screenshot.png")
-        report_data["region_screenshot_path"] = "/app/data/assets/images/region_screenshot.png"
 
 
     # --- 4. Render the LaTeX template ---

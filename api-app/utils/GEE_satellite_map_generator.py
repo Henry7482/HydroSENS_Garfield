@@ -25,10 +25,9 @@ def coordinates_to_ee_geometry(coordinates):
         coordinates = coordinates + [coordinates[0]]
     
     return ee.Geometry.Polygon([coordinates])
-
-def get_satellite_image_from_gee(coordinates, output_path, image_size=2048, max_cloud_cover=20, zoom_out_factor=5):
+def get_satellite_image_from_gee(coordinates, output_path, image_size=2048, max_cloud_cover=20, zoom_out_factor=3):
     """
-    Get high-quality satellite imagery from Google Earth Engine with proper zoom out for small regions
+    Get high-quality satellite imagery from Google Earth Engine with FIXED scale calculations
     """
     try:
         print("  Getting high-resolution satellite imagery from Google Earth Engine...")
@@ -45,13 +44,17 @@ def get_satellite_image_from_gee(coordinates, output_path, image_size=2048, max_
         lat_range = coords[:, 1].max() - coords[:, 1].min()
         max_range = max(lon_range, lat_range)
         
-        # For very small regions, increase zoom out factor significantly
+        print(f"    Original region size: {max_range:.4f} degrees (~{max_range*111:.1f}km)")
+        
+        # FIXED: Better zoom out factor logic
         if max_range < 0.001:  # Very small region (< ~100m)
-            zoom_out_factor = 6
+            zoom_out_factor = 3
         elif max_range < 0.01:  # Small region (< ~1km)
-            zoom_out_factor = 8
-        elif max_range < 0.05:  # Medium region (< ~5km)
-            zoom_out_factor = 10
+            zoom_out_factor = 3
+        elif max_range < 0.1:  # Medium-large region (< ~10km) - YOUR CASE
+            zoom_out_factor = 1.5  # REDUCED from 3 to 1.5
+        else:  # Very large regions
+            zoom_out_factor = 1.2
         
         # Create expanded region for zoom out
         center_lon = coords[:, 0].mean()
@@ -72,26 +75,31 @@ def get_satellite_image_from_gee(coordinates, output_path, image_size=2048, max_
         # Use expanded area for satellite image
         expanded_aoi = coordinates_to_ee_geometry(expanded_coords)
         
-        # Improved scale calculation for better resolution while showing context
-        region_size_meters = expanded_range * 111000  # Rough conversion to meters
+        # FIXED: Proper scale calculation based on ACTUAL expanded area size
+        region_size_meters = expanded_range * 111000  # Convert degrees to meters
         
-        # Calculate scale to ensure good resolution but show enough context
-        base_scale = region_size_meters / image_size
+        # Calculate scale to fit the expanded region into the image size
+        # Scale = meters per pixel
+        calculated_scale = region_size_meters / image_size
         
-        # For small regions, use SMALLER scale to show MORE DETAIL (zoom in)
-        # Smaller scale = higher resolution, more detail
-        if expanded_range < 0.005:  # Small regions like yours - ZOOM IN
-            scale = max(base_scale, 2)   # High detail - 5m per pixel
-        elif expanded_range < 0.01:  # Very small regions
-            scale = max(base_scale, 4)   # Good detail
-        elif expanded_range < 0.1:  # Moderately zoomed out
-            scale = max(base_scale, 6)
-        else:
-            scale = max(base_scale, 8)  # Normal scale for larger regions
+        # Set minimum scale based on satellite resolution and region size
+        if expanded_range < 0.01:  # Small expanded region (< ~1km)
+            min_scale = 2   # High resolution for small areas
+        elif expanded_range < 0.05:  # Medium expanded region (< ~5km)  
+            min_scale = 10  # Good resolution
+        elif expanded_range < 0.2:  # Large expanded region (< ~20km) - YOUR CASE
+            min_scale = 20  # Lower resolution but covers area
+        else:  # Very large expanded region
+            min_scale = 50  # Much lower resolution
         
-        print(f"    Using scale: {scale:.1f}m per pixel (zoom factor: {zoom_out_factor}x)")
+        # Use the larger of calculated scale or minimum scale
+        scale = max(calculated_scale, min_scale)
+        
+        print(f"    Zoom out factor: {zoom_out_factor}x")
+        print(f"    Expanded region size: {expanded_range:.4f} degrees (~{expanded_range*111:.1f}km)")
+        print(f"    Calculated scale: {calculated_scale:.1f}m/pixel")
+        print(f"    Using scale: {scale:.1f}m per pixel")
         print(f"    Image size: {image_size}x{image_size} pixels")
-        print(f"    Expanded region size: {expanded_range:.4f} degrees")
         
         # Try multiple satellite data sources in order of preference
         satellite_sources = [
@@ -99,31 +107,31 @@ def get_satellite_image_from_gee(coordinates, output_path, image_size=2048, max_
                 'name': 'Sentinel-2 (10m resolution)',
                 'collection': 'COPERNICUS/S2_SR_HARMONIZED',
                 'bands': ['B4', 'B3', 'B2'],  # RGB
-                'scale': max(scale, 10),
-                'date_range': ('2020-01-01', '2024-12-31'),
+                'scale': max(scale, 10),  # Sentinel-2 native resolution is 10m
+                'date_range': ('2023-01-01', '2024-12-31'),
                 'vis_params': {'min': 0, 'max': 3000, 'gamma': 1.2}
             },
             {
-                'name': 'Landsat 8-9 (30m resolution)', 
+                'name': 'Landsat 9 (30m resolution)', 
                 'collection': 'LANDSAT/LC09/C02/T1_L2',
                 'bands': ['SR_B4', 'SR_B3', 'SR_B2'],  # RGB
-                'scale': max(scale, 30),
-                'date_range': ('2020-01-01', '2024-12-31'),
-                'vis_params': {'min': 0, 'max': 2000, 'gamma': 1.2}
+                'scale': max(scale, 30),  # Landsat native resolution is 30m
+                'date_range': ('2022-01-01', '2024-12-31'),
+                'vis_params': {'min': 0, 'max': 20000, 'gamma': 1.2}
             },
             {
                 'name': 'Landsat 8 (30m resolution)',
                 'collection': 'LANDSAT/LC08/C02/T1_L2', 
                 'bands': ['SR_B4', 'SR_B3', 'SR_B2'],  # RGB
                 'scale': max(scale, 30),
-                'date_range': ('2015-01-01', '2024-12-31'),
-                'vis_params': {'min': 0, 'max': 2000, 'gamma': 1.2}
+                'date_range': ('2020-01-01', '2024-12-31'),
+                'vis_params': {'min': 0, 'max': 20000, 'gamma': 1.2}
             }
         ]
         
         for source in satellite_sources:
             try:
-                print(f"    Trying {source['name']}...")
+                print(f"    Trying {source['name']} at {source['scale']:.1f}m resolution...")
                 
                 # Get image collection
                 if 'COPERNICUS' in source['collection']:
@@ -154,9 +162,9 @@ def get_satellite_image_from_gee(coordinates, output_path, image_size=2048, max_
                 
                 # Scale pixel values for visualization (Landsat needs scaling)
                 if 'LANDSAT' in source['collection']:
-                    # Scale Landsat surface reflectance values
+                    # Scale Landsat surface reflectance values properly
                     image = image.multiply(0.0000275).add(-0.2) \
-                        .multiply(10000).uint16()  # Convert to 0-10000 range
+                        .multiply(10000).clamp(0, 10000).uint16()
                 
                 # Create visualization parameters for RGB
                 vis_params = {
@@ -164,6 +172,7 @@ def get_satellite_image_from_gee(coordinates, output_path, image_size=2048, max_
                     **source['vis_params']
                 }
                 
+                # IMPORTANT: Use the source's scale, not a fixed scale
                 # Get the image URL for download using expanded area
                 url = image.getThumbURL({
                     'region': expanded_aoi,
@@ -172,125 +181,51 @@ def get_satellite_image_from_gee(coordinates, output_path, image_size=2048, max_
                     **vis_params
                 })
                 
-                # Download the image
+                print(f"      Requesting image from GEE...")
+                
+                # Download the image with timeout
                 import requests
-                response = requests.get(url)
+                response = requests.get(url, timeout=120)  # Increased timeout
                 if response.status_code == 200:
-                    with open(output_path, 'wb') as f:
-                        f.write(response.content)
-                    
-                    print(f"    Successfully downloaded satellite image from {source['name']}")
-                    return True, expanded_coords, coordinates
+                    # Check if we actually got image data (not an error page)
+                    if len(response.content) > 10000:  # At least 10KB for a real image
+                        with open(output_path, 'wb') as f:
+                            f.write(response.content)
+                        
+                        print(f"    ✅ Successfully downloaded satellite image from {source['name']}")
+                        print(f"       File size: {len(response.content)} bytes")
+                        return True, expanded_coords, coordinates
+                    else:
+                        print(f"      Downloaded file too small ({len(response.content)} bytes), likely an error")
+                        continue
                 else:
                     print(f"      Failed to download from {source['name']}: HTTP {response.status_code}")
+                    if response.status_code == 400:
+                        print(f"      Bad request - scale {source['scale']:.1f}m might be too high for this region")
                     continue
                 
             except Exception as e:
                 print(f"      Error with {source['name']}: {str(e)[:100]}...")
                 continue
         
-        print("    All GEE satellite sources failed")
+        print("    ❌ All GEE satellite sources failed")
         return False, None, None
         
     except Exception as e:
-        print(f"    GEE satellite image generation failed: {e}")
+        print(f"    ❌ GEE satellite image generation failed: {e}")
         return False, None, None
 
-def add_overlay_to_image(image_path, original_coordinates, expanded_coordinates, 
-                        edge_color='red', face_color='none', line_width=3, alpha=0.6):
-    """
-    Add colored overlay to the satellite image with better line quality
-    """
-    try:
-        print("  Adding colored overlay to satellite image...")
-        
-        # Open the image
-        img = Image.open(image_path).convert('RGBA')
-        width, height = img.size
-        
-        # Create overlay with higher resolution for better line quality
-        overlay = Image.new('RGBA', (width, height), (0, 0, 0, 0))
-        draw = ImageDraw.Draw(overlay)
-        
-        # Convert coordinates to pixel coordinates
-        expanded_coords = np.array(expanded_coordinates[:-1])  # Remove duplicate last point
-        original_coords = np.array(original_coordinates[:-1] if original_coordinates[0] == original_coordinates[-1] 
-                                  else original_coordinates)
-        
-        # Calculate bounds
-        exp_lon_min, exp_lat_min = expanded_coords.min(axis=0)
-        exp_lon_max, exp_lat_max = expanded_coords.max(axis=0)
-        
-        # Convert original coordinates to pixel coordinates
-        pixel_coords = []
-        for lon, lat in original_coords:
-            # Normalize to 0-1
-            x_norm = (lon - exp_lon_min) / (exp_lon_max - exp_lon_min)
-            y_norm = 1 - (lat - exp_lat_min) / (exp_lat_max - exp_lat_min)  # Flip Y axis
-            
-            # Convert to pixel coordinates
-            x_pixel = int(x_norm * width)
-            y_pixel = int(y_norm * height)
-            pixel_coords.append((x_pixel, y_pixel))
-        
-        # Parse colors
-        def parse_color(color_str):
-            if color_str == 'none':
-                return None
-            elif color_str == 'red':
-                return (255, 0, 0, int(255 * alpha))
-            elif color_str == 'blue':
-                return (0, 0, 255, int(255 * alpha))
-            elif color_str == 'green':
-                return (0, 255, 0, int(255 * alpha))
-            elif color_str == 'yellow':
-                return (255, 255, 0, int(255 * alpha))
-            elif color_str == 'cyan':
-                return (0, 255, 255, int(255 * alpha))
-            elif color_str == 'magenta':
-                return (255, 0, 255, int(255 * alpha))
-            elif color_str == 'orange':
-                return (255, 165, 0, int(255 * alpha))
-            else:
-                return (255, 0, 0, int(255 * alpha))  # Default to red
-        
-        # Draw filled polygon if face_color is not 'none'
-        if face_color != 'none':
-            fill_color = parse_color(face_color)
-            if fill_color:
-                draw.polygon(pixel_coords, fill=fill_color)
-        
-        # Draw outline if edge_color is not 'none'
-        if edge_color != 'none':
-            outline_color = parse_color(edge_color)
-            if outline_color:
-                # Make outline fully opaque and thicker for better visibility
-                outline_color = outline_color[:3] + (255,)
-                draw.polygon(pixel_coords, outline=outline_color, width=line_width)
-        
-        # Composite the overlay onto the original image
-        img = Image.alpha_composite(img, overlay)
-        
-        # Convert back to RGB and save
-        img = img.convert('RGB')
-        img.save(image_path, 'PNG', quality=95)
-        
-        print(f"    Overlay added successfully")
-        return True
-        
-    except Exception as e:
-        print(f"    Error adding overlay: {e}")
-        return False
 
+# Also update the main function to use more reasonable defaults
 def generate_region_satellite_map_gee(coordinates, output_path="assets/images/region_screenshot.png", 
-                                     figsize=(8, 6), alpha=0.6,  # Changed figsize for half A4
+                                     figsize=(8, 6), alpha=0.6,
                                      edge_color='none', face_color='none',
-                                     line_width=3, use_gee_first=True,
-                                     add_padding=True, padding_factor=0.1,
-                                     zoom_out_factor=5):  # Increased default zoom out factor
+                                     line_width=3, use_gee_first=True,  # Changed back to True
+                                     add_padding=False,  # Disabled padding for large regions
+                                     padding_factor=0.1,
+                                     zoom_out_factor=3):
     """
-    Generate satellite map using Google Earth Engine first, with contextily fallback
-    Now optimized for better resolution and half A4 page size
+    Generate satellite map with FIXED parameters for large regions
     """
     
     try:
@@ -302,15 +237,27 @@ def generate_region_satellite_map_gee(coordinates, output_path="assets/images/re
         # Convert coordinates to numpy array
         coords = np.array(coordinates)
         
+        # Calculate region size to determine approach
+        lon_range = coords[:, 0].max() - coords[:, 0].min()
+        lat_range = coords[:, 1].max() - coords[:, 1].min()
+        max_range = max(lon_range, lat_range)
+        
+        print(f"Region size: {max_range:.4f} degrees (~{max_range*111:.1f}km)")
+        
+        # Disable padding for medium/large regions to avoid over-expansion
+        if max_range > 0.02:  # Larger than ~2km
+            add_padding = False
+            print("  Disabled padding for large region")
+        
         success = False
         
-        # Method 1: Try Google Earth Engine first with improved settings
+        # Method 1: Try Google Earth Engine first
         if use_gee_first:
-            print(f"Method 1: Trying Google Earth Engine (zoom out factor: {zoom_out_factor}x)...")
+            print(f"Method 1: Trying Google Earth Engine...")
             success, expanded_coords, original_coords = get_satellite_image_from_gee(
                 coordinates=coords.tolist(),
                 output_path=output_path,
-                image_size=2048,  # Increased resolution
+                image_size=2048,
                 zoom_out_factor=zoom_out_factor
             )
             
@@ -350,14 +297,14 @@ def generate_region_satellite_map_gee(coordinates, output_path="assets/images/re
         # Resize image to half A4 dimensions if successful
         if success:
             resize_image_for_half_a4(output_path)
-            print(f"  Region satellite map saved to: {output_path}")
+            print(f"  ✅ Region satellite map saved to: {output_path}")
         else:
-            print(f"  All satellite sources failed")
+            print(f"  ❌ All satellite sources failed")
             
         return success
         
     except Exception as e:
-        print(f"  Error generating satellite map: {e}")
+        print(f"  ❌ Error generating satellite map: {e}")
         return False
 
 def resize_image_for_half_a4(image_path):
@@ -480,7 +427,7 @@ def generate_contextily_satellite_map(coordinates, output_path, figsize=(8, 6),
         print(f"    Contextily generation failed: {e}")
         return False
 
-def calculate_adaptive_zoom(coordinates, min_zoom=10, max_zoom=16):
+def calculate_adaptive_zoom(coordinates, min_zoom=10, max_zoom=10):
     """
     Calculate appropriate zoom level based on region size - lower zoom shows more area
     """
@@ -506,15 +453,15 @@ def calculate_adaptive_zoom(coordinates, min_zoom=10, max_zoom=16):
         # For small regions, use LOWER zoom levels to show more context
         # Lower zoom = more area visible, higher zoom = more detail but less area
         if max_dimension < 50:    # Very small region (< 50m)
-            zoom = 10  # Show much more context
+            zoom = 8
         elif max_dimension < 100: # Small region (< 100m)
-            zoom = 11
+            zoom = 8
         elif max_dimension < 500: # Medium-small region (< 500m)
-            zoom = 12
+            zoom = 8
         elif max_dimension < 1000: # Medium region (< 1km)
-            zoom = 13
+            zoom = 8
         elif max_dimension < 2000: # Large region (< 2km)
-            zoom = 14
+            zoom = 8
         else:
             zoom = max_zoom
         
@@ -602,3 +549,89 @@ def extract_coordinates_from_metrics(metrics_data):
             [-73.9959, 40.7128],
             [-74.0059, 40.7128]
         ]
+
+def add_overlay_to_image(image_path, original_coordinates, expanded_coordinates, 
+                        edge_color='red', face_color='none', line_width=3, alpha=0.6):
+    """
+    Add colored overlay to the satellite image with better line quality
+    """
+    try:
+        print("  Adding colored overlay to satellite image...")
+        
+        # Open the image
+        img = Image.open(image_path).convert('RGBA')
+        width, height = img.size
+        
+        # Create overlay with higher resolution for better line quality
+        overlay = Image.new('RGBA', (width, height), (0, 0, 0, 0))
+        draw = ImageDraw.Draw(overlay)
+        
+        # Convert coordinates to pixel coordinates
+        expanded_coords = np.array(expanded_coordinates[:-1])  # Remove duplicate last point
+        original_coords = np.array(original_coordinates[:-1] if original_coordinates[0] == original_coordinates[-1] 
+                                  else original_coordinates)
+        
+        # Calculate bounds
+        exp_lon_min, exp_lat_min = expanded_coords.min(axis=0)
+        exp_lon_max, exp_lat_max = expanded_coords.max(axis=0)
+        
+        # Convert original coordinates to pixel coordinates
+        pixel_coords = []
+        for lon, lat in original_coords:
+            # Normalize to 0-1
+            x_norm = (lon - exp_lon_min) / (exp_lon_max - exp_lon_min)
+            y_norm = 1 - (lat - exp_lat_min) / (exp_lat_max - exp_lat_min)  # Flip Y axis
+            
+            # Convert to pixel coordinates
+            x_pixel = int(x_norm * width)
+            y_pixel = int(y_norm * height)
+            pixel_coords.append((x_pixel, y_pixel))
+        
+        # Parse colors
+        def parse_color(color_str):
+            if color_str == 'none':
+                return None
+            elif color_str == 'red':
+                return (255, 0, 0, int(255 * alpha))
+            elif color_str == 'blue':
+                return (0, 0, 255, int(255 * alpha))
+            elif color_str == 'green':
+                return (0, 255, 0, int(255 * alpha))
+            elif color_str == 'yellow':
+                return (255, 255, 0, int(255 * alpha))
+            elif color_str == 'cyan':
+                return (0, 255, 255, int(255 * alpha))
+            elif color_str == 'magenta':
+                return (255, 0, 255, int(255 * alpha))
+            elif color_str == 'orange':
+                return (255, 165, 0, int(255 * alpha))
+            else:
+                return (255, 0, 0, int(255 * alpha))  # Default to red
+        
+        # Draw filled polygon if face_color is not 'none'
+        if face_color != 'none':
+            fill_color = parse_color(face_color)
+            if fill_color:
+                draw.polygon(pixel_coords, fill=fill_color)
+        
+        # Draw outline if edge_color is not 'none'
+        if edge_color != 'none':
+            outline_color = parse_color(edge_color)
+            if outline_color:
+                # Make outline fully opaque and thicker for better visibility
+                outline_color = outline_color[:3] + (255,)
+                draw.polygon(pixel_coords, outline=outline_color, width=line_width)
+        
+        # Composite the overlay onto the original image
+        img = Image.alpha_composite(img, overlay)
+        
+        # Convert back to RGB and save
+        img = img.convert('RGB')
+        img.save(image_path, 'PNG', quality=95)
+        
+        print(f"    Overlay added successfully")
+        return True
+        
+    except Exception as e:
+        print(f"    Error adding overlay: {e}")
+        return False
