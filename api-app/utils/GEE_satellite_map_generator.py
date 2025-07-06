@@ -48,9 +48,9 @@ def get_satellite_image_from_gee(coordinates, output_path, image_size=2048, max_
         
         # FIXED: Better zoom out factor logic
         if max_range < 0.001:  # Very small region (< ~100m)
-            zoom_out_factor = 2
+            zoom_out_factor = 3
         elif max_range < 0.01:  # Small region (< ~1km)
-            zoom_out_factor = 2
+            zoom_out_factor = 3
         elif max_range < 0.1:  # Medium-large region (< ~10km) - YOUR CASE
             zoom_out_factor = 1.5  # REDUCED from 3 to 1.5
         else:  # Very large regions
@@ -84,7 +84,7 @@ def get_satellite_image_from_gee(coordinates, output_path, image_size=2048, max_
         
         # Set minimum scale based on satellite resolution and region size
         if expanded_range < 0.01:  # Small expanded region (< ~1km)
-            min_scale = 5   # High resolution for small areas
+            min_scale = 2   # High resolution for small areas
         elif expanded_range < 0.05:  # Medium expanded region (< ~5km)  
             min_scale = 10  # Good resolution
         elif expanded_range < 0.2:  # Large expanded region (< ~20km) - YOUR CASE
@@ -549,3 +549,89 @@ def extract_coordinates_from_metrics(metrics_data):
             [-73.9959, 40.7128],
             [-74.0059, 40.7128]
         ]
+
+def add_overlay_to_image(image_path, original_coordinates, expanded_coordinates, 
+                        edge_color='red', face_color='none', line_width=3, alpha=0.6):
+    """
+    Add colored overlay to the satellite image with better line quality
+    """
+    try:
+        print("  Adding colored overlay to satellite image...")
+        
+        # Open the image
+        img = Image.open(image_path).convert('RGBA')
+        width, height = img.size
+        
+        # Create overlay with higher resolution for better line quality
+        overlay = Image.new('RGBA', (width, height), (0, 0, 0, 0))
+        draw = ImageDraw.Draw(overlay)
+        
+        # Convert coordinates to pixel coordinates
+        expanded_coords = np.array(expanded_coordinates[:-1])  # Remove duplicate last point
+        original_coords = np.array(original_coordinates[:-1] if original_coordinates[0] == original_coordinates[-1] 
+                                  else original_coordinates)
+        
+        # Calculate bounds
+        exp_lon_min, exp_lat_min = expanded_coords.min(axis=0)
+        exp_lon_max, exp_lat_max = expanded_coords.max(axis=0)
+        
+        # Convert original coordinates to pixel coordinates
+        pixel_coords = []
+        for lon, lat in original_coords:
+            # Normalize to 0-1
+            x_norm = (lon - exp_lon_min) / (exp_lon_max - exp_lon_min)
+            y_norm = 1 - (lat - exp_lat_min) / (exp_lat_max - exp_lat_min)  # Flip Y axis
+            
+            # Convert to pixel coordinates
+            x_pixel = int(x_norm * width)
+            y_pixel = int(y_norm * height)
+            pixel_coords.append((x_pixel, y_pixel))
+        
+        # Parse colors
+        def parse_color(color_str):
+            if color_str == 'none':
+                return None
+            elif color_str == 'red':
+                return (255, 0, 0, int(255 * alpha))
+            elif color_str == 'blue':
+                return (0, 0, 255, int(255 * alpha))
+            elif color_str == 'green':
+                return (0, 255, 0, int(255 * alpha))
+            elif color_str == 'yellow':
+                return (255, 255, 0, int(255 * alpha))
+            elif color_str == 'cyan':
+                return (0, 255, 255, int(255 * alpha))
+            elif color_str == 'magenta':
+                return (255, 0, 255, int(255 * alpha))
+            elif color_str == 'orange':
+                return (255, 165, 0, int(255 * alpha))
+            else:
+                return (255, 0, 0, int(255 * alpha))  # Default to red
+        
+        # Draw filled polygon if face_color is not 'none'
+        if face_color != 'none':
+            fill_color = parse_color(face_color)
+            if fill_color:
+                draw.polygon(pixel_coords, fill=fill_color)
+        
+        # Draw outline if edge_color is not 'none'
+        if edge_color != 'none':
+            outline_color = parse_color(edge_color)
+            if outline_color:
+                # Make outline fully opaque and thicker for better visibility
+                outline_color = outline_color[:3] + (255,)
+                draw.polygon(pixel_coords, outline=outline_color, width=line_width)
+        
+        # Composite the overlay onto the original image
+        img = Image.alpha_composite(img, overlay)
+        
+        # Convert back to RGB and save
+        img = img.convert('RGB')
+        img.save(image_path, 'PNG', quality=95)
+        
+        print(f"    Overlay added successfully")
+        return True
+        
+    except Exception as e:
+        print(f"    Error adding overlay: {e}")
+        return False
