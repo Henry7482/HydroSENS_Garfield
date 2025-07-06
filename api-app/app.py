@@ -157,6 +157,19 @@ def generate_report():
     coordinates = data.get("coordinates", [])
     if not regionName or not startDate or not endDate or not coordinates:
         return jsonify({"error": "Missing required parameters"}), 400
+    
+    # Find cached report data
+    pdf_file_path = generate_unique_file_path(regionName, startDate, endDate, extension=".pdf")
+    print('Checking for cached report at:', pdf_file_path)
+    if os.path.exists(pdf_file_path):
+        return send_file(
+            pdf_file_path,
+            as_attachment=True,
+            mimetype='application/pdf',
+            download_name='report.pdf'
+        )
+    
+    report_filename = generate_unique_key(regionName, startDate, endDate)
     csv_file_path = generate_unique_file_path(regionName, startDate, endDate, extension=".csv")
     json_data = get_json_from_csv(csv_file_path)
     if not json_data:
@@ -166,7 +179,7 @@ def generate_report():
     
     try:
         # Run report generation and get the output PDF path
-        pdf_file_path = run_generate_report(json_data)
+        pdf_file_path = run_generate_report(json_data, report_filename)
         # pdf_file_path = run_generate_report(report_data) # DEMO ONLY
 
         # Send the file to the user

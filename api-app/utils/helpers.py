@@ -31,7 +31,10 @@ def generate_unique_file_path(region_name: str, start_date: str, end_date: str, 
         str: Full file path with unique filename.
     """
     fileName = generate_unique_key(region_name, start_date, end_date) + extension
-    outputMaster = os.getenv('OUTPUT_MASTER', './data/output')
+    if (extension == ".pdf"):
+        outputMaster = './data/generated_reports'
+    else:
+        outputMaster = os.getenv('OUTPUT_MASTER', './data/output')
     filePath = os.path.join(outputMaster, fileName)
     return filePath
 

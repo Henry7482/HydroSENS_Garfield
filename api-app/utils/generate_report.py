@@ -9,12 +9,12 @@ from .satellite_map_generator import generate_region_satellite_map, extract_coor
 from .generate_graph import generate_graphs
 from .GEE_satellite_map_generator import generate_region_satellite_map_gee
 
-def run_generate_report(metrics_data):
+def run_generate_report(metrics_data, report_name):
     # --- Configuration ---
+    print("Report name: ", report_name)
     TEMPLATE_DIR = "/app/data/templates"  # Directory where the LaTeX template is stored
     TEMPLATE_FILENAME = "report_template.tex.j2" # Assumes file-based template
-    OUTPUT_DIR = "./generated_reports"
-    REPORT_JOBNAME = "RSS_Hydro_Region_Report_2025"
+    OUTPUT_DIR = "./data/generated_reports"
     KEEP_TEX = True # Set to False to delete the .tex file after compilation
 
     # --- 1. Get data for the Report ---
@@ -96,7 +96,7 @@ def run_generate_report(metrics_data):
     print("\nStep 5: Compiling LaTeX to PDF...")
     pdf_file_path = compile_latex_to_pdf(
         latex_content=rendered_latex,
-        jobname=REPORT_JOBNAME,
+        jobname=report_name,
         output_dir=OUTPUT_DIR,
         use_latexmk=True, # Recommended
         latex_engine="xelatex", # latexmk will use this engine
