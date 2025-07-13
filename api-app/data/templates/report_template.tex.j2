@@ -84,7 +84,7 @@
 \begin{center}
 \begin{minipage}{0.75\textwidth}
     \raggedright
-    \HydroTitle{RSS\vspace{0.5cm}}\\[0.1cm]
+    \HydroTitle{RSS-Hydro\vspace{0.5cm}}\\[0.1cm]
     \HydroTitle{HYDROSENS}
 \end{minipage}
 \hfill
@@ -283,34 +283,5 @@
 
 \BLOCK{ endif }
 \BLOCK{ endfor }
-
-% Action Plans Page
-\newpage
-
-\vspace*{-0.5cm}
-\noindent\HydroTitle{ACTION PLANS}
-
-% Light blue line under the heading
-\vspace{0.5\baselineskip}
-\noindent\color{hydrosenscyan}\rule{0.25\textwidth}{3pt}
-\vspace{2\baselineskip}
-
-\noindent\begin{minipage}{\textwidth} % \noindent ensures the minipage starts flush with the left margin
-\setstretch{1.5}
-\color{black}
-\begin{itemize}[leftmargin=*, rightmargin=0pt] % Adjusts list margins
-    \BLOCK{ for action in action_plan }
-    \item \HydroContent{\VAR{ action | e }}
-    \BLOCK{ endfor }
-\end{itemize}
-\end{minipage}
-
-% --- Image at the bottom of the page (no margins) ---
-\begin{tikzpicture}[remember picture,overlay]
-    \node[anchor=south west, inner sep=0pt, outer sep=0pt] at (current page.south west) {
-        \includegraphics[width=\paperwidth,height=10cm]{assets/images/action.jpg} % Adjust height as needed
-    };
-\end{tikzpicture}
-% --- End of image block ---
 
 \end{document}

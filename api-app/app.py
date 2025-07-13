@@ -205,8 +205,9 @@ def generate_report():
     
     report_filename = generate_unique_key(regionName, startDate, endDate)
     csv_file_path = generate_unique_file_path(regionName, startDate, endDate, extension=".csv")
-    json_data = get_json_from_csv(csv_file_path)
-    if not json_data:
+    if os.path.exists(csv_file_path):
+        json_data = get_json_from_csv(csv_file_path)
+    else:
         return jsonify({"error": "CSV file not found or invalid"}), 404
     json_data['region'] = regionName
     json_data['coordinates'] = coordinates

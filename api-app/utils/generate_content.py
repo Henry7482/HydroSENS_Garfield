@@ -36,11 +36,11 @@ def generate_content(input_dict):
 
     class MetricDescription(str, Enum):
         ndvi = "Normalized difference vegitation index - The greenness and density of vegetation from 0 to 1."
-        vegetation_fraction = "Proportion of ground covered by vegetation."
-        soil_fraction = "Proportion of exposed soil in a given area."
+        vegetation_fraction = "Proportion of ground covered by vegetation (0-1)."
+        soil_fraction = "Proportion of ground covered by soil (0-1)."
         precipitation = "Amount of rainfall in millimeters."
-        temperature = "The measure of atmospheric heat in degrees Celsius."
-        curve_number = "Direct surface runoff from a rainfall event."
+        temperature = "The measure of atmospheric heat in °C."
+        curve_number = "Direct surface runoff from a rainfall event (1-100)."
 
     class KeyInsight(BaseModel):
         title: str
@@ -148,7 +148,7 @@ You will receive environmental data in a JSON structure similar to the following
 Your job is to generate the report's content and fit them into the provided json schema. The data includes:
 - location: The "region" value from the input data. Ideally at least 2 geographical identifiers in the name. For example: "DISTRICT 7 - HO CHI MINH"
 - time_period: The start and end date as a string. For example: "10 APR - 35 MAY 2025"
-- overview: Provide a concise summary of the overall environmental conditions and notable changes observed during the reporting period based on the input data. Highlight the general state of vegetation and water factors. Include the region and time period analyzed, the metrics included in the analysis, and the suggestions related to the action plan. Limit the content by 80 words.
+- overview: Provide a concise summary of the overall environmental conditions and notable changes observed during the reporting period based on the input data. Highlight the general state of vegetation and water factors. Include the region and time period analyzed, the metrics included in the analysis. Limit the content by 80 words.
 - key_insights: List the most significant findings or trends observed across the different metrics. Each insight should be in a [{"title": Category, "detail": Insight Description}] json format (e.g., [{"title": "Healthy but Moderate Vegetation", "Vegetation indicators (NDVI and Vegetation Fraction) remained consistently moderate,peaking during spring and early summer."}, {"title": "Seasonal Rainfall Distribution", "Precipitation followed a clear seasonal
 pattern, with wetter periods in early autumn
 and late summer, and noticeably drier
