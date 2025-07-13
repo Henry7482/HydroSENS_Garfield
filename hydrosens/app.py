@@ -5,29 +5,112 @@ import base64
 import json
 import zipfile
 import tempfile
+import threading
+import time
+import uuid
+from datetime import datetime
+import ctypes
+import sys
 
 app = Flask(__name__)
+
+# Global variables to track processing state
+current_thread = None
+current_thread_id = None
+current_result = None
+result_ready_event = threading.Event()
+thread_lock = threading.Lock()
+
+def terminate_thread(thread):
+    """Terminate a thread forcefully"""
+    if not thread or not thread.is_alive():
+        return
+    
+    try:
+        # Get the thread ID
+        thread_id = thread.ident
+        if thread_id is None:
+            return
+            
+        # Force terminate the thread
+        res = ctypes.pythonapi.PyThreadState_SetAsyncExc(
+            ctypes.c_long(thread_id), 
+            ctypes.py_object(SystemExit)
+        )
+        
+        if res == 0:
+            print("Failed to terminate thread - invalid thread ID")
+        elif res != 1:
+            # If it returns a number greater than one, you're in trouble,
+            # and you should call it again with exc=NULL to revert the effect
+            ctypes.pythonapi.PyThreadState_SetAsyncExc(thread_id, None)
+            print("Exception raise failure")
+        else:
+            print(f"Thread {thread_id} terminated successfully")
+            
+    except Exception as e:
+        print(f"Error terminating thread: {str(e)}")
+
+def run_hydrosens_background(thread_id, coordinates, start_date, end_date, output_dir, amc, precipitation, crs):
+    """
+    Wrapper function that runs hydrosens analysis in background
+    No modification needed to the original function
+    """
+    global current_result
+    
+    try:
+        print(f"Starting Hydrosens analysis (Thread: {thread_id})")
+        
+        # Run the actual analysis - NO CHANGES NEEDED to the original function
+        results = run_hydrosens_with_coordinates(
+            coordinates=coordinates,
+            start_date=start_date,
+            end_date=end_date,
+            output_dir=output_dir,
+            amc=amc,
+            precipitation=precipitation,
+            crs=crs
+        )
+        
+        # Set successful result
+        current_result = {
+            'success': True,
+            'message': 'Hydrosens analysis completed successfully',
+            'parameters': {
+                'start_date': start_date,
+                'end_date': end_date,
+                'amc': amc,
+                'precipitation': precipitation,
+                'coordinates': coordinates,
+                'crs': crs,
+                'num_coordinates': len(coordinates)
+            },
+            'outputs': results
+        }
+        
+        print(f"Thread {thread_id} completed successfully")
+        result_ready_event.set()
+        
+    except SystemExit:
+        # Thread was terminated
+        print(f"Thread {thread_id} was terminated")
+        return
+        
+    except Exception as e:
+        print(f"Thread {thread_id} failed: {str(e)}")
+        current_result = {
+            'success': False,
+            'error': str(e)
+        }
+        result_ready_event.set()
 
 @app.route('/hydrosens', methods=['POST'])
 def run_hydrosens_endpoint():
     """
-    Updated endpoint that accepts coordinates instead of shapefiles.
-    
-    Expected JSON payload:
-    {
-        "start_date": "2023-06-01",
-        "end_date": "2023-06-30", 
-        "amc": 2,
-        "precipitation": 10.5,
-        "coordinates": [
-            [-120.5, 36.2],
-            [-120.4, 36.2], 
-            [-120.4, 36.3],
-            [-120.5, 36.3]
-        ],
-        "crs": "EPSG:4326"
-    }
+    Endpoint that starts background processing and waits for the latest result
     """
+    global current_thread, current_thread_id, current_result
+    
     output_master = os.getenv('OUTPUT_MASTER', '/app/data/output')
     
     try:
@@ -49,7 +132,7 @@ def run_hydrosens_endpoint():
         start_date = data.get('start_date')
         end_date = data.get('end_date')
         amc = data.get('amc')
-        precipitation = data.get('precipitation') or data.get('p')  # Support both field names
+        precipitation = data.get('precipitation') or data.get('p')
         coordinates = data.get('coordinates')
         crs = data.get('crs', 'EPSG:4326')
         
@@ -65,8 +148,8 @@ def run_hydrosens_endpoint():
         
         # Validate and convert parameters
         try:
-            amc = int(amc) if amc else 2  # Default AMC = 2
-            precipitation = float(precipitation) if precipitation else 10.0  # Default precipitation = 10mm
+            amc = int(amc) if amc else 2
+            precipitation = float(precipitation) if precipitation else 10.0
         except (ValueError, TypeError):
             return jsonify({
                 "error": "Invalid parameter types. amc must be integer, precipitation must be number"
@@ -78,7 +161,6 @@ def run_hydrosens_endpoint():
                 "error": "Coordinates must be a list of at least 3 coordinate pairs"
             }), 400
         
-        # Validate each coordinate pair
         for i, coord in enumerate(coordinates):
             if not isinstance(coord, list) or len(coord) != 2:
                 return jsonify({
@@ -87,7 +169,6 @@ def run_hydrosens_endpoint():
             
             try:
                 lon, lat = float(coord[0]), float(coord[1])
-                # Basic validation for geographic coordinates in WGS84
                 if crs.upper() == 'EPSG:4326':
                     if not (-180 <= lon <= 180):
                         return jsonify({
@@ -102,7 +183,6 @@ def run_hydrosens_endpoint():
                     "error": f"Coordinate {i} must contain numeric values"
                 }), 400
         
-        # Validate AMC values
         if amc not in [1, 2, 3]:
             return jsonify({
                 "error": "AMC (Antecedent Moisture Condition) must be 1, 2, or 3"
@@ -111,48 +191,63 @@ def run_hydrosens_endpoint():
         # Create output directory
         os.makedirs(output_master, exist_ok=True)
         
+        # Thread management
+        with thread_lock:
+            # Generate new thread ID
+            new_thread_id = str(uuid.uuid4())
+            
+            # Terminate current thread if it exists
+            if current_thread and current_thread.is_alive():
+                print(f"Terminating existing thread: {current_thread_id}")
+                terminate_thread(current_thread)
+                
+                # Give it a moment to clean up
+                time.sleep(0.1)
+            
+            # Reset result state
+            current_result = None
+            result_ready_event.clear()
+            
+            # Create and start new thread
+            current_thread = threading.Thread(
+                target=run_hydrosens_background,
+                args=(new_thread_id, coordinates, start_date, end_date, output_master, amc, precipitation, crs)
+            )
+            current_thread_id = new_thread_id
+            current_thread.start()
+        
         # Log the request parameters
-        app.logger.info(f"Running Hydrosens analysis:")
+        print(f"Started Hydrosens analysis (Thread: {new_thread_id}):")
         app.logger.info(f"  Date range: {start_date} to {end_date}")
         app.logger.info(f"  AMC: {amc}, Precipitation: {precipitation}mm")
         app.logger.info(f"  Coordinates: {len(coordinates)} points, CRS: {crs}")
         app.logger.info(f"  Output directory: {output_master}")
         
-        # Run the Hydrosens analysis
-        results = run_hydrosens_with_coordinates(
-            coordinates=coordinates,
-            start_date=start_date,
-            end_date=end_date,
-            output_dir=output_master,
-            amc=amc,
-            precipitation=precipitation,
-            crs=crs
-        )
+        # Wait for the result (this blocks until processing is complete or cancelled)
+        print(f"Waiting for thread {new_thread_id} to complete...")
+        result_ready_event.wait()
         
-        # Prepare successful response
-        response_data = {
-            "message": "Hydrosens analysis completed successfully",
-            "parameters": {
-                "start_date": start_date,
-                "end_date": end_date,
-                "amc": amc,
-                "precipitation": precipitation,
-                "coordinates": coordinates,
-                "crs": crs,
-                "num_coordinates": len(coordinates)
-            },
-            "outputs": results
-        }
+        # Check if this thread was superseded (another request came in)
+        if current_thread_id != new_thread_id:
+            print(f"Thread {new_thread_id} was superseded by {current_thread_id}")
+            return jsonify({}), 200  # Conflict
         
-        app.logger.info(f"Analysis completed. Results: {len(results) if results else 0} dates processed")
-        return jsonify(response_data), 200
+        # Return the result
+        if current_result and current_result.get('success'):
+            print(f"Thread {new_thread_id} completed successfully")
+            return jsonify(current_result), 200
+        else:
+            error_msg = current_result.get('error', 'Unknown error') if current_result else 'No result available'
+            print(f"Thread {new_thread_id} failed: {error_msg}")
+            return jsonify({
+                "error": error_msg
+            }), 500
         
     except Exception as e:
         app.logger.error(f"Error in Hydrosens analysis: {str(e)}")
         return jsonify({
             "error": f"Analysis failed: {str(e)}"
         }), 500
-
 
 @app.route('/hydrosens/validate', methods=['POST'])
 def validate_coordinates():
