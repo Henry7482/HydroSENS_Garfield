@@ -15,12 +15,6 @@ app = Flask(__name__)
 CORS(app, resources={r"/*": {"origins": "*"}})
 HYDROSENS_STATISTICS = "curve-number, ndvi, precipitation, soil-fraction, temperature, vegetation-fraction"
 
-import zipfile
-import tempfile
-import os
-from werkzeug.datastructures import FileStorage
-from io import BytesIO
-
 from utils.coor_convert import lon_to_utm_zone, build_utm_wkt
 from pyproj import Transformer
 import json
@@ -30,6 +24,7 @@ def analyze():
     data = request.get_json()
     if not data:
         return jsonify({"error": "Invalid JSON payload"}), 400
+    
     statistics = data.get("statistics", "").strip().lower()
     if statistics != HYDROSENS_STATISTICS:
         return jsonify({"error": "Invalid statistics parameter"}), 400
@@ -59,6 +54,7 @@ def analyze():
             extension=".csv"
         )
         
+        # Check if we already have results for this request
         if os.path.exists(csv_path):
             return get_json_from_csv(csv_path)
         
@@ -70,44 +66,82 @@ def analyze():
         hydrosens_url = hydrosens_url.rstrip("/") + "/hydrosens"
         
         print(f"[analyze] Forwarding to HydroSENS at {hydrosens_url}")
-        response = requests.post(hydrosens_url, json=data_payload)
-        print(f"[analyze] HydroSENS responded with status {response.status_code}")
-
-        output_master = os.getenv("OUTPUT_MASTER", "./data/output")
-       
-
         
-        csv_file = requests.get(hydrosens_url + "/csv-file")
-        # Save the CSV file to output master
-        # Check if download is successful
-        if csv_file.status_code == 200:
-            # Determine the filename (you can also parse from headers if needed)
-            os.makedirs(output_master, exist_ok=True)
-
-            # Write the content to file
-            with open(csv_path, "wb") as f:
-                f.write(csv_file.content)
+        # Send request to HydroSENS and wait for the response
+        # This will now block until the latest request completes
+        response = requests.post(hydrosens_url, json=data_payload, timeout=None)  # No timeout - wait for completion
+        print(f"[analyze] HydroSENS responded with status {response.status_code}")
+        
+        if response.status_code == 200:
+            # Processing completed successfully
+            response_data = response.json()
+            
+            # Download the files now that processing is complete
+            output_master = os.getenv("OUTPUT_MASTER", "./data/output")
+            
+            try:
+                # Download CSV file
+                csv_file = requests.get(hydrosens_url + "/csv-file")
+                if csv_file.status_code == 200:
+                    os.makedirs(output_master, exist_ok=True)
+                    with open(csv_path, "wb") as f:
+                        f.write(csv_file.content)
+                    
+                    print(f"[analyze] CSV saved at: {csv_path}")
+                else:
+                    print(f"[analyze] CSV download failed with status {csv_file.status_code}")
                 
-        # Download zipped TIFs
-        tif_zip = requests.get(hydrosens_url + "/export-latest-tifs")
-        if tif_zip.status_code == 200:
-            tif_zip_path = generate_unique_file_path(
-                data_payload["region_name"],
-                data_payload["start_date"],
-                data_payload["end_date"],
-                extension=".zip"
-            ) 
-            with open(tif_zip_path, "wb") as f:
-                f.write(tif_zip.content)
-            print(f"[analyze] TIF zip saved at: {tif_zip_path}")
+                # Download zipped TIFs
+                tif_zip = requests.get(hydrosens_url + "/export-latest-tifs")
+                if tif_zip.status_code == 200:
+                    tif_zip_path = generate_unique_file_path(
+                        data_payload["region_name"],
+                        data_payload["start_date"],
+                        data_payload["end_date"],
+                        extension=".zip"
+                    )
+                    with open(tif_zip_path, "wb") as f:
+                        f.write(tif_zip.content)
+                    print(f"[analyze] TIF zip saved at: {tif_zip_path}")
+                else:
+                    print(f"[analyze] TIF zip download failed with status {tif_zip.status_code}")
+                
+                # Return the CSV data if available, otherwise return the response data
+                if os.path.exists(csv_path):
+                    return get_json_from_csv(csv_path)
+                else:
+                    return jsonify(response_data), 200
+                    
+            except Exception as e:
+                print(f"[analyze] Error downloading files: {str(e)}")
+                # Still return the response data even if file download fails
+                return jsonify(response_data), 200
+                
+        elif response.status_code == 409:
+            # Request was cancelled due to newer request
+            return jsonify({
+                "error": "Request was cancelled because a newer request was submitted"
+            }), 409
+            
         else:
-            print(f"[analyze] TIF zip request failed with status {tif_zip.status_code}")
+            # Handle other error responses
+            try:
+                error_data = response.json()
+                return jsonify(error_data), response.status_code
+            except:
+                return jsonify({
+                    "error": f"HydroSENS request failed with status {response.status_code}"
+                }), response.status_code
 
-        return jsonify(response.json()), response.status_code
-
+    except requests.exceptions.Timeout:
+        return jsonify({"error": "Request timeout"}), 504
+    except requests.exceptions.RequestException as e:
+        print(f"[analyze] Request exception: {str(e)}")
+        return jsonify({"error": f"Failed to connect to HydroSENS: {str(e)}"}), 503
     except Exception as e:
         print(f"[analyze] Exception:", str(e))
         return jsonify({"error": str(e)}), 500
+
 
 @app.route('/analyze/export-tifs', methods=['POST'])
 def get_tif_zip():
