@@ -204,8 +204,8 @@
 \vspace{0.1cm}
 % Header
 \noindent
-\begin{tabular*}{\textwidth}{@{\extracolsep{\fill}} l r }
-\textsf{\textbf{\small STATISTICS}} & \textsf{\textbf{\small PAGE \VAR{ "%02d"|format(loop.index + 4) }}} \\
+\begin{tabular*}{\textwidth}{@{\extracolsep{\fill}} l }
+\textsf{\textbf{\small STATISTICS}} \\
 \end{tabular*}
 \vspace{0.2cm}
 % Title section
@@ -258,7 +258,7 @@
     \setstretch{1.5}
   \end{minipage}
 \end{tabularx}
-\vspace{0.7cm}
+\vspace{0.2cm}
 
 % Chart section - full width
 \noindent
@@ -278,8 +278,15 @@
   \HydroContent{\VAR{ metric.time_insight | e }}
 \end{minipage}
 \vfill
+% Page number at bottom right
+\vspace{0.2cm}
 % Bottom border line
 \noindent\color{teal}\rule{\textwidth}{2pt}
+\vspace{0.2cm}
+\noindent
+\begin{tabular*}{\textwidth}{@{\extracolsep{\fill}} l r }
+ & \textsf{\textbf{\small PAGE \VAR{ "%02d"|format(loop.index + 4) }}} \\
+\end{tabular*}
 
 \BLOCK{ endif }
 \BLOCK{ endfor }
