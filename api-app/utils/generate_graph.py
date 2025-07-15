@@ -1,6 +1,7 @@
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 import pandas as pd
+import numpy as np
 from pathlib import Path
 import os
 
@@ -42,19 +43,51 @@ def generate_graphs(metrics_data, report_data, graph_output_dir="data/assets/gra
         if not field or field not in stats_df.columns:
             print(f"Skipping graph for unknown or missing field '{metric_id}'")
             continue
+        
+        # Get the data for this metric
+        metric_data = stats_df[field].dropna()
+        
+        # Skip if there's only one data point or no data
+        if len(metric_data) <= 1:
+            print(f"Skipping linear regression for '{metric_id}' - insufficient data points")
+            
         # figure & axes 
         fig, ax = plt.subplots(figsize=(16.06, 7.68), dpi=96,
                             facecolor='white')   # white canvas
         ax.set_facecolor('white')                   # white plot area
 
         # data line
-        stats_df[field].plot(
+        metric_data.plot(
             ax=ax,
             marker='o',
             markersize=8,
             linewidth=4,
             color='#33c3ff'                         # keep bright‐blue line
         )
+
+        # Add linear regression line if we have more than 1 data point
+        if len(metric_data) > 1:
+            # Convert datetime index to numerical values (days since first date)
+            x_datetime = metric_data.index
+            x_numeric = (x_datetime - x_datetime[0]).days.values
+            y_values = metric_data.values
+            
+            # Calculate linear regression using the actual time intervals
+            slope, intercept = np.polyfit(x_numeric, y_values, 1)
+            
+            # Generate regression line points using the same time intervals
+            regression_line = slope * x_numeric + intercept
+            
+            # Plot regression line using the datetime index for proper x-axis alignment
+            ax.plot(x_datetime, regression_line, 
+                   linestyle='--', 
+                   linewidth=2, 
+                   color='red', 
+                   alpha=0.6,
+                   label=f'Trend (slope: {slope:.4f})')
+            
+            # Add legend to show the trend line (positioned above the plot area, left-aligned)
+            ax.legend(fontsize=20, bbox_to_anchor=(0, 1.02), loc='lower left')
 
         # grid: solid black, horizontal only 
         ax.yaxis.grid(True, color='black', linewidth=0.6)   # horizontal lines
