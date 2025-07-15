@@ -157,7 +157,8 @@ months during mid-year"}]). Limit number of insights to 5, with each insight's t
 - mean_value: Calculate the average value of the metric across all dates in the input data. Round up to 2 decimals.
 - time_insight: Interpret the calculated mean value. What does this average value suggest about the condition (e.g., "An average NDVI of X suggests moderate vegetation density"). Then analyze each metric value through the given time period and write into a short paragraph of the time series insight gathered from the data. Relate it to the region's context if possible. Keep the paragraph 80 words max. 
 - action_plan: Write an action plan as a list of potential action items that the stakeholers can take based on all the insights of the report. Keep the list at 7 points max, with 20 words limit for each point.
-- trend: The overall trend based on the metric value in percentage. For example: {"percent": 60.1, "uptrend": true}. If the trend is zero you can set "uptrend" as true.
+
+Note: The trend calculation will be handled separately and should not be included in your analysis.
 
 **Input Data:**
 Here is the input data you will analyze

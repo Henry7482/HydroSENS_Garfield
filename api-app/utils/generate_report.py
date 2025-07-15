@@ -4,6 +4,7 @@ import shutil
 from .report_templating import render_latex_template
 from .latex_utils import compile_latex_to_pdf
 from .generate_content import generate_content
+from .trend_calculator import calculate_trends
 from data.templates.mock_data import report_data
 from .satellite_map_generator import generate_region_satellite_map, extract_coordinates_from_metrics
 from .generate_graph import generate_graphs
@@ -21,6 +22,18 @@ def run_generate_report(metrics_data, report_name):
     print("Step 1: Generating content...")
     report_data = generate_content(metrics_data)
     # report_data = metrics_data # FOR DEMO ONLY
+
+    # --- 1.5. Calculate trends using linear regression ---
+    print("Step 1.5: Calculating trends...")
+    trends = calculate_trends(metrics_data)
+    
+    # Insert calculated trends into report_data
+    if report_data and "metrics" in report_data:
+        for metric in report_data["metrics"]:
+            metric_id = metric.get("id")
+            if metric_id in trends:
+                metric["trend"] = trends[metric_id]
+                print(f"Updated trend for {metric_id}: {trends[metric_id]}")
 
     # --- 2. Generate graphs using Mathplotlib ---
     """
