@@ -13,7 +13,7 @@ import time
 # Start the timer
 start_time = time.time()
 
-def run_hydrosens(main_folder, start_date, end_date, output_master, amc, p, coordinates, crs='EPSG:4326'):
+def run_hydrosens(main_folder, start_date, end_date, output_master, amc, p, coordinates, crs='EPSG:4326', endmember=3):
     """
     Run the Hydrosens workflow for a given date range and coordinate-based area of interest.
     
@@ -26,6 +26,9 @@ def run_hydrosens(main_folder, start_date, end_date, output_master, amc, p, coor
         p: Precipitation value
         coordinates: List of [lon, lat] pairs defining the polygon boundary
         crs: Coordinate reference system (default: 'EPSG:4326')
+        endmember: Number of endmembers for MESMA (2 or 3, default: 3)
+                  3 = vegetation, impervious, soil
+                  2 = vegetation, soil (no impervious)
     """
     # Clear all contents of the output_master directory
     if os.path.exists(output_master):
@@ -43,10 +46,10 @@ def run_hydrosens(main_folder, start_date, end_date, output_master, amc, p, coor
     aoi = coordinates_to_ee_geometry(coordinates)
     
     print(f"Processing coordinate-based AOI with {len(coordinates)} vertices")
-    return process_dates(start_date, end_date, aoi, output_master, amc, p, coordinates, crs)
+    return process_dates(start_date, end_date, aoi, output_master, amc, p, coordinates, crs, endmember)
 
 
-def process_dates(start_date, end_date, aoi, output_master, amc, p, coordinates, crs):
+def process_dates(start_date, end_date, aoi, output_master, amc, p, coordinates, crs, endmember=3):
     """Process Sentinel-2 images within a date range if imagery exists."""
 
     HSG250m = os.getenv("HSG250m")
@@ -183,7 +186,18 @@ def process_dates(start_date, end_date, aoi, output_master, amc, p, coordinates,
             **{str(wavelengths[i]): em_spectra_trim[i] for i in range(len(wavelengths))}
         }
         df = pd.DataFrame(data)
-        material_order = ['vegetation', 'impervious', 'soil']
+        
+        # Filter materials based on endmember parameter
+        if endmember == 2:
+            # Remove impervious materials, keep only vegetation and soil
+            material_order = ['vegetation', 'soil']
+            df = df[df['MaterialClass'].isin(material_order)]
+            print("Using 2 endmembers: vegetation and soil (impervious excluded)")
+        else:
+            # Default 3 endmembers: vegetation, impervious, soil
+            material_order = ['vegetation', 'impervious', 'soil']
+            print("Using 3 endmembers: vegetation, impervious, and soil")
+        
         df['MaterialClass'] = pd.Categorical(df['MaterialClass'], categories=material_order, ordered=True)
         df = df.sort_values('MaterialClass')
         output_csv = output + r"/trimmed_library.csv"
@@ -195,9 +209,22 @@ def process_dates(start_date, end_date, aoi, output_master, amc, p, coordinates,
         out_fractions = doMESMA(class_list, img, trim_lib)
         final = np.flip(out_fractions, axis=1)
         final = np.rot90(final, k=3, axes=(1, 2))
-        soil = final[0]
-        impervious = final[1]
-        vegetation = final[2]
+        
+        # Handle different endmember configurations
+        if endmember == 2:
+            # For 2 endmembers: [soil, vegetation]
+            soil = final[0]
+            vegetation = final[1]
+            # Set impervious to zero array for 2-endmember case
+            impervious = np.zeros_like(soil)
+            print("2-endmember MESMA: soil and vegetation fractions calculated, impervious set to zero")
+        else:
+            # For 3 endmembers: [soil, impervious, vegetation]
+            soil = final[0]
+            impervious = final[1]
+            vegetation = final[2]
+            print("3-endmember MESMA: soil, impervious, and vegetation fractions calculated")
+        
         vegetation_values.append(np.nanmean(vegetation))
         impervious_values.append(np.nanmean(impervious))
         soil_values.append(np.nanmean(soil))
@@ -334,9 +361,16 @@ def process_dates(start_date, end_date, aoi, output_master, amc, p, coordinates,
 
         file2 = None
 
-        # CCN calculation
+        # CCN calculation - adjust based on endmember parameter
         imp_CN = 98
-        CCNarr = (soil_reclass * soil) + (veg_reclass * vegetation) + (imp_CN * impervious)
+        if endmember == 2:
+            # For 2 endmembers: only use soil and vegetation (impervious is zero)
+            CCNarr = (soil_reclass * soil) + (veg_reclass * vegetation)
+            print("CCN calculation using 2 endmembers (soil and vegetation only)")
+        else:
+            # For 3 endmembers: use soil, vegetation, and impervious
+            CCNarr = (soil_reclass * soil) + (veg_reclass * vegetation) + (imp_CN * impervious)
+            print("CCN calculation using 3 endmembers (soil, vegetation, and impervious)")
 
         ### Slope Correction ###
 
@@ -470,7 +504,7 @@ def create_output_folder(base_output, date):
 
 
 # Example usage function for the coordinate-based approach
-def run_hydrosens_with_coordinates(coordinates, start_date, end_date, output_dir, amc=2, precipitation=10.0, crs='EPSG:4326'):
+def run_hydrosens_with_coordinates(coordinates, start_date, end_date, output_dir, amc=2, precipitation=10.0, crs='EPSG:4326', endmember=3):
     """
     Convenience function to run Hydrosens analysis with coordinate array
     
@@ -483,6 +517,9 @@ def run_hydrosens_with_coordinates(coordinates, start_date, end_date, output_dir
         amc: Antecedent Moisture Condition (1, 2, or 3)
         precipitation: Precipitation value in mm
         crs: Coordinate reference system (default: 'EPSG:4326')
+        endmember: Number of endmembers for MESMA (2 or 3, default: 3)
+                  3 = vegetation, impervious, soil
+                  2 = vegetation, soil (no impervious)
     
     Returns:
         Dictionary with analysis results
@@ -501,6 +538,10 @@ def run_hydrosens_with_coordinates(coordinates, start_date, end_date, output_dir
         if not (-90 <= coord[1] <= 90):
             raise ValueError(f"Latitude {coord[1]} at position {i} is out of valid range [-90, 90]")
     
+    # Validate endmember parameter - default to 3 if not 2
+    if endmember != 2:
+        endmember = 3
+    
     print(f"Running Hydrosens analysis for polygon with {len(coordinates)} vertices")
     print(f"Date range: {start_date} to {end_date}")
     print(f"AMC: {amc}, Precipitation: {precipitation}mm")
@@ -513,5 +554,6 @@ def run_hydrosens_with_coordinates(coordinates, start_date, end_date, output_dir
         amc=amc,
         p=precipitation,
         coordinates=coordinates,
-        crs=crs
+        crs=crs,
+        endmember=endmember
     )

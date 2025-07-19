@@ -51,17 +51,16 @@ def terminate_thread(thread):
     except Exception as e:
         print(f"Error terminating thread: {str(e)}")
 
-def run_hydrosens_background(thread_id, coordinates, start_date, end_date, output_dir, amc, precipitation, crs):
+def run_hydrosens_background(thread_id, coordinates, start_date, end_date, output_dir, amc, precipitation, crs, endmember):
     """
     Wrapper function that runs hydrosens analysis in background
-    No modification needed to the original function
     """
     global current_result
     
     try:
         print(f"Starting Hydrosens analysis (Thread: {thread_id})")
         
-        # Run the actual analysis - NO CHANGES NEEDED to the original function
+        # Run the actual analysis with endmember parameter
         results = run_hydrosens_with_coordinates(
             coordinates=coordinates,
             start_date=start_date,
@@ -69,7 +68,8 @@ def run_hydrosens_background(thread_id, coordinates, start_date, end_date, outpu
             output_dir=output_dir,
             amc=amc,
             precipitation=precipitation,
-            crs=crs
+            crs=crs,
+            endmember=endmember
         )
         
         # Set successful result
@@ -83,6 +83,7 @@ def run_hydrosens_background(thread_id, coordinates, start_date, end_date, outpu
                 'precipitation': precipitation,
                 'coordinates': coordinates,
                 'crs': crs,
+                'endmember': endmember,
                 'num_coordinates': len(coordinates)
             },
             'outputs': results
@@ -125,7 +126,8 @@ def run_hydrosens_endpoint():
                 'amc': request.form.get('amc'),
                 'precipitation': request.form.get('p') or request.form.get('precipitation'),
                 'coordinates': json.loads(request.form.get('coordinates', '[]')),
-                'crs': request.form.get('crs', 'EPSG:4326')
+                'crs': request.form.get('crs', 'EPSG:4326'),
+                'endmember': request.form.get('endmember')
             }
         
         # Extract parameters
@@ -135,6 +137,7 @@ def run_hydrosens_endpoint():
         precipitation = data.get('precipitation') or data.get('p')
         coordinates = data.get('coordinates')
         crs = data.get('crs', 'EPSG:4326')
+        endmember = data.get('endmember')  # Extract endmember parameter
         
         # Validate required parameters
         if not all([start_date, end_date, coordinates]):
@@ -150,9 +153,16 @@ def run_hydrosens_endpoint():
         try:
             amc = int(amc) if amc else 2
             precipitation = float(precipitation) if precipitation else 10.0
+            # Handle endmember parameter - default to 3 if not 2
+            if endmember is not None:
+                endmember = int(endmember)
+                if endmember != 2:
+                    endmember = 3
+            else:
+                endmember = 3
         except (ValueError, TypeError):
             return jsonify({
-                "error": "Invalid parameter types. amc must be integer, precipitation must be number"
+                "error": "Invalid parameter types. amc must be integer, precipitation must be number, endmember must be integer"
             }), 400
         
         # Validate coordinates
@@ -208,10 +218,10 @@ def run_hydrosens_endpoint():
             current_result = None
             result_ready_event.clear()
             
-            # Create and start new thread
+            # Create and start new thread with endmember parameter
             current_thread = threading.Thread(
                 target=run_hydrosens_background,
-                args=(new_thread_id, coordinates, start_date, end_date, output_master, amc, precipitation, crs)
+                args=(new_thread_id, coordinates, start_date, end_date, output_master, amc, precipitation, crs, endmember)
             )
             current_thread_id = new_thread_id
             current_thread.start()
@@ -220,6 +230,7 @@ def run_hydrosens_endpoint():
         print(f"Started Hydrosens analysis (Thread: {new_thread_id}):")
         app.logger.info(f"  Date range: {start_date} to {end_date}")
         app.logger.info(f"  AMC: {amc}, Precipitation: {precipitation}mm")
+        app.logger.info(f"  Endmembers: {endmember} ({'vegetation, soil' if endmember == 2 else 'vegetation, impervious, soil'})")
         app.logger.info(f"  Coordinates: {len(coordinates)} points, CRS: {crs}")
         app.logger.info(f"  Output directory: {output_master}")
         
@@ -389,7 +400,7 @@ def health_check():
         "status": "healthy",
         "service": "Hydrosens API",
         "version": "2.0.0",
-        "features": ["coordinate-based AOI", "coordinate validation"]
+        "features": ["coordinate-based AOI", "coordinate validation", "2/3 endmember MESMA"]
     }), 200
 
 
@@ -406,7 +417,7 @@ def api_info():
                 "description": "Run Hydrosens analysis",
                 "content_type": "application/json",
                 "required_fields": ["start_date", "end_date", "coordinates"],
-                "optional_fields": ["amc", "precipitation", "crs"],
+                "optional_fields": ["amc", "precipitation", "crs", "endmember"],
                 "example_payload": {
                     "start_date": "2023-06-01",
                     "end_date": "2023-06-30",
@@ -418,7 +429,8 @@ def api_info():
                         [-120.4, 36.3],
                         [-120.5, 36.3]
                     ],
-                    "crs": "EPSG:4326"
+                    "crs": "EPSG:4326",
+                    "endmember": 3
                 }
             },
             "/hydrosens/validate": {
@@ -447,8 +459,14 @@ def api_info():
         "parameter_ranges": {
             "amc": "1, 2, or 3 (Antecedent Moisture Condition)",
             "precipitation": "Any positive number (millimeters)",
+            "endmember": "2 or 3 (number of endmembers for MESMA analysis, defaults to 3)",
             "longitude": "-180 to 180 (for EPSG:4326)",
             "latitude": "-90 to 90 (for EPSG:4326)"
+        },
+        "endmember_options": {
+            "2": "vegetation and soil only (impervious excluded)",
+            "3": "vegetation, impervious, and soil (default)",
+            "note": "Any value other than 2 defaults to 3"
         }
     }), 200
 

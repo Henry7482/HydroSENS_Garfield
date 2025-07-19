@@ -43,7 +43,8 @@ def analyze():
         "precipitation": data.get("precipitation"),
         "crs": data.get("crs", "EPSG:4326"),
         "num_coordinates": data.get("num_coordinates", 0),
-        "coordinates": coordinates
+        "coordinates": coordinates,
+        "endmember": data.get("endmember", 3)  # Extract endmember parameter with default value 3
     }
 
     try:
