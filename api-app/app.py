@@ -59,9 +59,10 @@ def analyze():
             results = get_json_from_region_csv(region_csv_path, start_date, end_date, check_range=True)
         if not results.get("needs_analysis"):
             print(f"[analyze] Found complete results for {region_name} from {start_date} to {end_date}")
-            return results["outputs"]
+            return results
         else:
-            prev_outputs = results.get("outputs", {})
+            prev_outputs = {"outputs": {}}
+            prev_outputs["outputs"] = results.get("outputs", {})
             print(f"[analyze] Partial data found. Re-analyzing from {results['analyze_from']} to {end_date}")
             start_date = results["analyze_from"]
             data_payload["start_date"] = start_date  # Update payload with new start date
@@ -112,9 +113,10 @@ def analyze():
                 # Return the CSV data if available, otherwise return the response data
                 if os.path.exists(region_csv_path):
                     if not prev_outputs:
-                        return get_json_from_region_csv(region_csv_path, start_date, end_date, check_range=False)["outputs"]
-                    new_outputs = get_json_from_region_csv(region_csv_path, start_date, end_date, check_range=False)["outputs"]
-                    prev_outputs.update(new_outputs)
+                        return get_json_from_region_csv(region_csv_path, start_date, end_date, check_range=False)
+                    new_outputs = {}
+                    new_outputs["outputs"] = get_json_from_region_csv(region_csv_path, start_date, end_date, check_range=False)["outputs"]
+                    prev_outputs["outputs"].update(new_outputs["outputs"])
                     return prev_outputs
                 else:
                     return jsonify(response_data), 200
