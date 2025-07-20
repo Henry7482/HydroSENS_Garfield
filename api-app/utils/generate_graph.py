@@ -56,6 +56,8 @@ def generate_graphs(metrics_data, report_data, graph_output_dir="data/assets/gra
                             facecolor='white')   # white canvas
         ax.set_facecolor('white')                   # white plot area
 
+        if metric_id == "precipitation":
+            ax.set_ylim(bottom=0)
         # data line
         metric_data.plot(
             ax=ax,

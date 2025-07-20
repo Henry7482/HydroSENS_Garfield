@@ -1,6 +1,6 @@
 from flask import Flask, request, jsonify, send_file
 from utils.generate_report import run_generate_report
-from utils.helpers import generate_unique_key, generate_unique_file_path, get_json_from_csv
+from utils.helpers import generate_unique_key, generate_unique_file_path, get_json_from_region_csv, save_region_csv
 import requests
 import os
 from flask_cors import CORS  
@@ -48,17 +48,25 @@ def analyze():
     }
 
     try:
-        csv_path = generate_unique_file_path(
-            data_payload["region_name"],
-            data_payload["start_date"],
-            data_payload["end_date"],
-            extension=".csv"
-        )
+        output_master = os.getenv("OUTPUT_MASTER", "./data/output")
+        region_name = data_payload["region_name"]
+        start_date = data_payload["start_date"]
+        end_date = data_payload["end_date"]
+        region_csv_path = os.path.join(output_master, f"{region_name}.csv")
         
         # Check if we already have results for this request
-        if os.path.exists(csv_path):
-            return get_json_from_csv(csv_path)
-        
+        if os.path.exists(region_csv_path):
+            results = get_json_from_region_csv(region_csv_path, start_date, end_date, check_range=True)
+        if not results.get("needs_analysis"):
+            print(f"[analyze] Found complete results for {region_name} from {start_date} to {end_date}")
+            return results
+        else:
+            prev_outputs = {"outputs": {}}
+            prev_outputs["outputs"] = results.get("outputs", {})
+            print(f"[analyze] Partial data found. Re-analyzing from {results['analyze_from']} to {end_date}")
+            start_date = results["analyze_from"]
+            data_payload["start_date"] = start_date  # Update payload with new start date
+
         # Prepare files payload
         hydrosens_url = os.getenv("HYDROSENS_URL")
         if not hydrosens_url:
@@ -77,18 +85,13 @@ def analyze():
             # Processing completed successfully
             response_data = response.json()
             
-            # Download the files now that processing is complete
-            output_master = os.getenv("OUTPUT_MASTER", "./data/output")
-            
+            # Download the files now that processing is complete            
             try:
                 # Download CSV file
                 csv_file = requests.get(hydrosens_url + "/csv-file")
                 if csv_file.status_code == 200:
                     os.makedirs(output_master, exist_ok=True)
-                    with open(csv_path, "wb") as f:
-                        f.write(csv_file.content)
-                    
-                    print(f"[analyze] CSV saved at: {csv_path}")
+                    save_region_csv(region_name, csv_file.content, output_master)
                 else:
                     print(f"[analyze] CSV download failed with status {csv_file.status_code}")
                 
@@ -108,8 +111,13 @@ def analyze():
                     print(f"[analyze] TIF zip download failed with status {tif_zip.status_code}")
                 
                 # Return the CSV data if available, otherwise return the response data
-                if os.path.exists(csv_path):
-                    return get_json_from_csv(csv_path)
+                if os.path.exists(region_csv_path):
+                    if not prev_outputs:
+                        return get_json_from_region_csv(region_csv_path, start_date, end_date, check_range=False)
+                    new_outputs = {}
+                    new_outputs["outputs"] = get_json_from_region_csv(region_csv_path, start_date, end_date, check_range=False)["outputs"]
+                    prev_outputs["outputs"].update(new_outputs["outputs"])
+                    return prev_outputs
                 else:
                     return jsonify(response_data), 200
                     
@@ -183,18 +191,19 @@ def get_csv_file():
 
 @app.route('/generate-report', methods=['POST'])
 def generate_report():
+    output_master = os.getenv("OUTPUT_MASTER", "./data/output")
     data = request.get_json()
     if not data:
         return jsonify({"error": "Invalid JSON payload"}), 400
-    regionName = data.get("region_name", "Unknown Region")
-    startDate = data.get("start_date")
-    endDate = data.get("end_date")
+    region_name = data.get("region_name", "Unknown Region")
+    start_date = data.get("start_date")
+    end_date = data.get("end_date")
     coordinates = data.get("coordinates", [])
-    if not regionName or not startDate or not endDate or not coordinates:
+    if not region_name or not start_date or not end_date or not coordinates:
         return jsonify({"error": "Missing required parameters"}), 400
     
     # Find cached report data
-    pdf_file_path = generate_unique_file_path(regionName, startDate, endDate, extension=".pdf")
+    pdf_file_path = generate_unique_file_path(region_name, start_date, end_date, extension=".pdf")
     print('Checking for cached report at:', pdf_file_path)
     if os.path.exists(pdf_file_path):
         return send_file(
@@ -203,14 +212,16 @@ def generate_report():
             mimetype='application/pdf',
             download_name='report.pdf'
         )
-    
-    report_filename = generate_unique_key(regionName, startDate, endDate)
-    csv_file_path = generate_unique_file_path(regionName, startDate, endDate, extension=".csv")
+
+    report_filename = generate_unique_key(region_name, start_date, end_date)
+    csv_file_path = os.path.join(output_master, f"{region_name}.csv")
+
     if os.path.exists(csv_file_path):
-        json_data = get_json_from_csv(csv_file_path)
+        json_data = get_json_from_region_csv(csv_file_path, start_date, end_date, check_range=False)
+
     else:
         return jsonify({"error": "CSV file not found or invalid"}), 404
-    json_data['region'] = regionName
+    json_data['region'] = region_name
     json_data['coordinates'] = coordinates
     
     try:
