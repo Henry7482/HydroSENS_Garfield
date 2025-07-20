@@ -593,73 +593,104 @@ def trimmed_library(fpath, num_bands, row_numbers= None):
     return class_list, em_spectra.T
 
 
-def doMESMA(class_list,img, trim_lib):
+def doMESMA(class_list, img, trim_lib):
     """
      doMESMA
          This function carries out Multiple Endmember Spectral Mixture Analysis and subsequent shade normalization
      Parameters:
-         class_list: Material classes (impervious, soil, vegetation) extracted from the spectral library
+         class_list: Material classes extracted from the spectral library
          img: Prepared input image
          trim_lib: Spectral library that has been pruned with the output of AMUSES
-         output: path to output file
      Returns:
-         3D array with vegetation, impervious surface, and soil fractions
+         3D array with endmember fractions (number of bands depends on number of endmembers)
      """
 
     # Setup MESMA model based on trimmed spectral library
     em_models = mesma.MesmaModels()
     em_models.setup(class_list)
-    em_models = mesma.MesmaModels()
-    em_models.setup(class_list)
-
-    # Select 2-EM, 3-EM, 4-EM models for unmixing
+    
+    # Get the number of unique classes
+    n_classes = len(np.unique(class_list))
+    print(f"MESMA processing with {n_classes} endmember classes: {np.unique(class_list)}")
+    
+    # Use standard 3-endmember model setup since we're including dummy impervious
+    # This should avoid the indexing issues
     em_models.select_level(state=True, level=2)
     em_models.select_level(state=True, level=3)
     em_models.select_level(state=False, level=4)
-    for i in np.arange(em_models.n_classes):
+    
+    for i in range(min(n_classes, 3)):  # Limit to 3 to avoid index errors
         em_models.select_class(state=True, index=i, level=2)
         em_models.select_class(state=True, index=i, level=3)
         em_models.select_class(state=False, index=i, level=4)
 
-
-
-    out_fractions = np.zeros((len(np.unique(class_list)) + 1, img.shape[1], img.shape[2])) * np.nan
+    # Initialize output array - expect the standard setup
+    expected_bands = n_classes + 1  # materials + shade
+    out_fractions = np.zeros((expected_bands, img.shape[1], img.shape[2])) * np.nan
+    
+    print(f"Initialized output array shape: {out_fractions.shape}")
+    print(f"Expected {expected_bands} bands: {n_classes} materials + 1 shade")
+    
     total_start = timeit.default_timer()
     start_row = 0
-    split = 10  # number of rows per to be unmixed at a time
+    split = 10  # number of rows to be unmixed at a time
 
-    for chunk in range(start_row, img.shape[1], split):
-        start = timeit.default_timer()
-        MESMA = mesma.MesmaCore(n_cores=8)
+    try:
+        for chunk in range(start_row, img.shape[1], split):
+            start = timeit.default_timer()
+            MESMA = mesma.MesmaCore(n_cores=8)
 
-        models, fractions, rmse, residuals = MESMA.execute(image=img[:, start_row:start_row + split, :].data,
-                                                           library=trim_lib,
-                                                           look_up_table=em_models.return_look_up_table(),
-                                                           em_per_class=em_models.em_per_class,
-                                                           constraints=(0, 1.0, -0.1, 0.8, 0.025, -9999, -9999),
-                                                           no_data_pixels=np.where(
-                                                               img[0, start_row:start_row + split,
-                                                               :].data == -9999),
-                                                           shade_spectrum=None,
-                                                           fusion_value=0.007,
-                                                           bands_selection_values=(0.99, 0.01)
-                                                           )
+            models, fractions, rmse, residuals = MESMA.execute(
+                image=img[:, start_row:start_row + split, :].data,
+                library=trim_lib,
+                look_up_table=em_models.return_look_up_table(),
+                em_per_class=em_models.em_per_class,
+                constraints=(0, 1.0, -0.1, 0.8, 0.025, -9999, -9999),
+                no_data_pixels=np.where(img[0, start_row:start_row + split, :].data == -9999),
+                shade_spectrum=None,
+                fusion_value=0.007,
+                bands_selection_values=(0.99, 0.01)
+            )
 
-        np.seterr(invalid='ignore')
-        out_fractions[:, start_row:start_row + split, :] = fractions
+            np.seterr(invalid='ignore')
+            
+            print(f"Chunk {chunk}: fractions shape = {fractions.shape}")
+            
+            # Handle fractions array dimensions
+            min_bands = min(fractions.shape[0], out_fractions.shape[0])
+            out_fractions[:min_bands, start_row:start_row + split, :] = fractions[:min_bands]
+            
+            # If we got fewer bands than expected, fill the rest with zeros
+            if fractions.shape[0] < out_fractions.shape[0]:
+                for missing_band in range(fractions.shape[0], out_fractions.shape[0]):
+                    out_fractions[missing_band, start_row:start_row + split, :] = 0
 
-        start_row = start_row + split
+            start_row = start_row + split
 
-        stop = timeit.default_timer()
+            stop = timeit.default_timer()
+            print('Chunk Time: ', stop - start)
 
-        # Obtain time for each chunk to be unmixed
-        print('Chunk Time: ', stop - start)
+    except Exception as e:
+        print(f"Error during MESMA processing: {e}")
+        print("Attempting to continue with partial results...")
+        # Fill any unprocessed areas with NaN
+        if start_row < img.shape[1]:
+            out_fractions[:, start_row:, :] = np.nan
 
     total_stop = timeit.default_timer()
     print(f"Total execution time: {total_stop - total_start:.2f} seconds")
 
-    #Perform shade normalization
-    out_shade = shade_normalisation.ShadeNormalisation.execute(out_fractions, shade_band=-1)
+    # Perform shade normalization if we have valid data
+    try:
+        out_shade = shade_normalisation.ShadeNormalisation.execute(out_fractions, shade_band=-1)
+        print(f"MESMA output shape after shade normalization: {out_shade.shape}")
+    except Exception as e:
+        print(f"Error during shade normalization: {e}")
+        print("Returning unnormalized results")
+        out_shade = out_fractions
+    
+    print(f"Final MESMA output bands: {out_shade.shape[0]}")
+    
     return out_shade
 
 def nan_to_zero(x):

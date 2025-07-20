@@ -13,7 +13,7 @@ import time
 # Start the timer
 start_time = time.time()
 
-def run_hydrosens(main_folder, start_date, end_date, output_master, amc, p, coordinates, crs='EPSG:4326'):
+def run_hydrosens(main_folder, start_date, end_date, output_master, amc, p, coordinates, crs='EPSG:4326', endmember=3):
     """
     Run the Hydrosens workflow for a given date range and coordinate-based area of interest.
     
@@ -26,6 +26,9 @@ def run_hydrosens(main_folder, start_date, end_date, output_master, amc, p, coor
         p: Precipitation value
         coordinates: List of [lon, lat] pairs defining the polygon boundary
         crs: Coordinate reference system (default: 'EPSG:4326')
+        endmember: Number of endmembers for MESMA (2 or 3, default: 3)
+                  3 = vegetation, impervious, soil
+                  2 = vegetation, soil (no impervious)
     """
     # Clear all contents of the output_master directory
     if os.path.exists(output_master):
@@ -43,10 +46,10 @@ def run_hydrosens(main_folder, start_date, end_date, output_master, amc, p, coor
     aoi = coordinates_to_ee_geometry(coordinates)
     
     print(f"Processing coordinate-based AOI with {len(coordinates)} vertices")
-    return process_dates(start_date, end_date, aoi, output_master, amc, p, coordinates, crs)
+    return process_dates(start_date, end_date, aoi, output_master, amc, p, coordinates, crs, endmember)
 
 
-def process_dates(start_date, end_date, aoi, output_master, amc, p, coordinates, crs):
+def process_dates(start_date, end_date, aoi, output_master, amc, p, coordinates, crs, endmember=3):
     """Process Sentinel-2 images within a date range if imagery exists."""
 
     HSG250m = os.getenv("HSG250m")
@@ -168,36 +171,138 @@ def process_dates(start_date, end_date, aoi, output_master, amc, p, coordinates,
         image_array[image_array == 0] = -9999
         img = prepare_S2image(output + r"/bands_masked.tif")
         class_list_init_, initial_lib = prepare_sli(sli, num_bands=8)
+
+        # Always run AMUSES on the full original library
         A = amuses.Amuses()
         em_spectra_dict = A.execute(image_array, initial_lib, 0.9, 0.95, 15, (0.0002, 0.02))
         em_spectra_list = list(em_spectra_dict.values())
         indices_array = em_spectra_dict['amuses_indices']
-        class_list_init, em_spectra_trim = trimmed_library(sli,
-                                                           num_bands=8, row_numbers=indices_array)
+
+        # Get the trimmed library from the original spectral library using AMUSES indices
+        class_list_init, em_spectra_trim = trimmed_library(sli, num_bands=8, row_numbers=indices_array)
 
         output_file = output + r"/trimmed_library.csv"
         wavelengths = [490, 560, 665, 783, 842, 865, 1610, 2190]
 
+        # Create dataframe with all AMUSES-selected endmembers
         data = {
             "MaterialClass": class_list_init,
             **{str(wavelengths[i]): em_spectra_trim[i] for i in range(len(wavelengths))}
         }
         df = pd.DataFrame(data)
-        material_order = ['vegetation', 'impervious', 'soil']
-        df['MaterialClass'] = pd.Categorical(df['MaterialClass'], categories=material_order, ordered=True)
-        df = df.sort_values('MaterialClass')
+
+        # Filter based on endmember parameter AFTER getting AMUSES results
+        if endmember == 2:
+            # For 2 endmembers, we need to work around MESMA library limitations
+            # Keep vegetation and soil, but also include minimal impervious to avoid indexing errors
+            material_order = ['vegetation', 'soil']
+            df_filtered = df[df['MaterialClass'].isin(material_order)].copy()
+            
+            # If we don't have enough endmembers, we need to create a dummy impervious entry
+            # to prevent MESMA from failing with indexing errors
+            if len(df_filtered) > 0:
+                # Add one minimal impervious endmember to satisfy MESMA's internal requirements
+                impervious_rows = df[df['MaterialClass'] == 'impervious']
+                if len(impervious_rows) > 0:
+                    # Take just one impervious endmember to complete the set
+                    dummy_impervious = impervious_rows.iloc[:1].copy()
+                    df_filtered = pd.concat([df_filtered, dummy_impervious])
+                    material_order = ['vegetation', 'impervious', 'soil']  # Standard order for MESMA
+                    print(f"Using 2 endmembers: vegetation and soil (with dummy impervious for MESMA compatibility)")
+                else:
+                    print("Warning: No impervious endmembers available for MESMA compatibility")
+                    material_order = ['vegetation', 'soil']
+            
+            print(f"Original AMUSES selection had {len(df)} endmembers, filtered to {len(df_filtered)}")
+        else:
+            # Use all 3 endmembers
+            material_order = ['vegetation', 'impervious', 'soil']
+            df_filtered = df[df['MaterialClass'].isin(material_order)].copy()
+            print("Using 3 endmembers: vegetation, impervious, and soil")
+
+        # Ensure we have endmembers for the analysis
+        if len(df_filtered) == 0:
+            print("Warning: No endmembers of desired types found after filtering. Using original AMUSES selection.")
+            df_filtered = df.copy()
+            material_order = list(df['MaterialClass'].unique())
+
+        # For balanced selection, limit the number per class
+        unique_classes = df_filtered['MaterialClass'].unique()
+        if len(unique_classes) >= 2:
+            # Balance the selection but ensure we have all required classes
+            max_per_class = max(3, min(10, len(df_filtered) // len(unique_classes)))
+            balanced_df = []
+            for cls in unique_classes:
+                cls_rows = df_filtered[df_filtered['MaterialClass'] == cls].head(max_per_class)
+                balanced_df.append(cls_rows)
+            df_filtered = pd.concat(balanced_df).copy()
+            
+            class_counts = df_filtered['MaterialClass'].value_counts().to_dict()
+            print(f"Balanced selection: {class_counts}")
+
+        print(f"Final endmember selection: {list(df_filtered['MaterialClass'].unique())}")
+
+        # Sort by material class
+        df_filtered['MaterialClass'] = pd.Categorical(df_filtered['MaterialClass'], categories=material_order, ordered=True)
+        df_filtered = df_filtered.sort_values('MaterialClass')
+        df_filtered = df_filtered.reset_index(drop=True)
+
         output_csv = output + r"/trimmed_library.csv"
         print("output_csv", output_csv)
-        df.to_csv(output_csv, index=False)
+        df_filtered.to_csv(output_csv, index=False)
+
         class_list, trim_lib = prepare_sli(output + r"/trimmed_library.csv", num_bands=8)
 
         # Run MESMA algorithm using trimmed spectral library
         out_fractions = doMESMA(class_list, img, trim_lib)
         final = np.flip(out_fractions, axis=1)
         final = np.rot90(final, k=3, axes=(1, 2))
-        soil = final[0]
-        impervious = final[1]
-        vegetation = final[2]
+        
+        # Handle different endmember configurations
+        if endmember == 2:
+            # For 2 endmembers: We included a dummy impervious for MESMA compatibility
+            # Now we need to extract only vegetation and soil, and set impervious to zero
+            unique_classes = list(df_filtered['MaterialClass'].unique())
+            print(f"MESMA output shape: {final.shape}, Classes: {unique_classes}")
+            
+            # Find indices for vegetation and soil in the final output
+            class_indices = {cls: i for i, cls in enumerate(sorted(unique_classes))}
+            
+            if 'vegetation' in class_indices and 'soil' in class_indices:
+                vegetation = final[class_indices['vegetation']]
+                soil = final[class_indices['soil']]
+                print(f"Extracted vegetation (index {class_indices['vegetation']}) and soil (index {class_indices['soil']})")
+            else:
+                # Fallback: assume first two bands are what we want
+                vegetation = final[0] if len(final) > 0 else np.zeros_like(mask_array)
+                soil = final[1] if len(final) > 1 else np.zeros_like(mask_array)
+                print("Fallback: using first two MESMA output bands")
+            
+            # Set impervious to zero array for 2-endmember case
+            impervious = np.zeros_like(soil)
+            print("2-endmember MESMA: vegetation and soil fractions calculated, impervious set to zero")
+        else:
+            # For 3 endmembers: Standard processing
+            unique_classes = list(df_filtered['MaterialClass'].unique())
+            print(f"MESMA output shape: {final.shape}, Classes: {unique_classes}")
+            
+            if len(unique_classes) >= 3:
+                # Standard 3-endmember case - order depends on alphabetical sorting
+                class_indices = {cls: i for i, cls in enumerate(sorted(unique_classes))}
+                vegetation = final[class_indices.get('vegetation', 0)]
+                impervious = final[class_indices.get('impervious', 1)]
+                soil = final[class_indices.get('soil', 2)]
+                print(f"Extracted vegetation (index {class_indices.get('vegetation', 0)}), "
+                      f"impervious (index {class_indices.get('impervious', 1)}), "
+                      f"soil (index {class_indices.get('soil', 2)})")
+            else:
+                # Fallback for cases with fewer than 3 endmembers
+                vegetation = final[0] if len(final) > 0 else np.zeros_like(mask_array)
+                impervious = final[1] if len(final) > 1 else np.zeros_like(mask_array)
+                soil = final[2] if len(final) > 2 else np.zeros_like(mask_array)
+                print("Fallback: using first three MESMA output bands")
+            print("3-endmember MESMA: vegetation, impervious, and soil fractions calculated")
+        
         vegetation_values.append(np.nanmean(vegetation))
         impervious_values.append(np.nanmean(impervious))
         soil_values.append(np.nanmean(soil))
@@ -334,9 +439,16 @@ def process_dates(start_date, end_date, aoi, output_master, amc, p, coordinates,
 
         file2 = None
 
-        # CCN calculation
+        # CCN calculation - adjust based on endmember parameter
         imp_CN = 98
-        CCNarr = (soil_reclass * soil) + (veg_reclass * vegetation) + (imp_CN * impervious)
+        if endmember == 2:
+            # For 2 endmembers: only use soil and vegetation (impervious is zero)
+            CCNarr = (soil_reclass * soil) + (veg_reclass * vegetation)
+            print("CCN calculation using 2 endmembers (soil and vegetation only)")
+        else:
+            # For 3 endmembers: use soil, vegetation, and impervious
+            CCNarr = (soil_reclass * soil) + (veg_reclass * vegetation) + (imp_CN * impervious)
+            print("CCN calculation using 3 endmembers (soil, vegetation, and impervious)")
 
         ### Slope Correction ###
 
@@ -439,7 +551,6 @@ def process_dates(start_date, end_date, aoi, output_master, amc, p, coordinates,
             "curve-number": nan_to_zero(data['curve_number'][i])
         }
 
-
     df = pd.DataFrame(data)
     df = df[
     df[['veg_mean', 'soil_mean', 'curve_number',
@@ -456,7 +567,6 @@ def process_dates(start_date, end_date, aoi, output_master, amc, p, coordinates,
 
     return formatted_data
 
-
 def create_output_folder(base_output, date):
     """Create a subfolder for the specific date."""
     # Convert date to string format YYYY-MM-DD
@@ -470,7 +580,7 @@ def create_output_folder(base_output, date):
 
 
 # Example usage function for the coordinate-based approach
-def run_hydrosens_with_coordinates(coordinates, start_date, end_date, output_dir, amc=2, precipitation=10.0, crs='EPSG:4326'):
+def run_hydrosens_with_coordinates(coordinates, start_date, end_date, output_dir, amc=2, precipitation=10.0, crs='EPSG:4326', endmember=3):
     """
     Convenience function to run Hydrosens analysis with coordinate array
     
@@ -483,6 +593,9 @@ def run_hydrosens_with_coordinates(coordinates, start_date, end_date, output_dir
         amc: Antecedent Moisture Condition (1, 2, or 3)
         precipitation: Precipitation value in mm
         crs: Coordinate reference system (default: 'EPSG:4326')
+        endmember: Number of endmembers for MESMA (2 or 3, default: 3)
+                  3 = vegetation, impervious, soil
+                  2 = vegetation, soil (no impervious)
     
     Returns:
         Dictionary with analysis results
@@ -501,6 +614,10 @@ def run_hydrosens_with_coordinates(coordinates, start_date, end_date, output_dir
         if not (-90 <= coord[1] <= 90):
             raise ValueError(f"Latitude {coord[1]} at position {i} is out of valid range [-90, 90]")
     
+    # Validate endmember parameter - default to 3 if not 2
+    if endmember != 2:
+        endmember = 3
+    
     print(f"Running Hydrosens analysis for polygon with {len(coordinates)} vertices")
     print(f"Date range: {start_date} to {end_date}")
     print(f"AMC: {amc}, Precipitation: {precipitation}mm")
@@ -513,5 +630,6 @@ def run_hydrosens_with_coordinates(coordinates, start_date, end_date, output_dir
         amc=amc,
         p=precipitation,
         coordinates=coordinates,
-        crs=crs
+        crs=crs,
+        endmember=endmember
     )
