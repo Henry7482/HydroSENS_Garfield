@@ -57,15 +57,15 @@ def analyze():
         # Check if we already have results for this request
         if os.path.exists(region_csv_path):
             results = get_json_from_region_csv(region_csv_path, start_date, end_date, check_range=True)
-        if not results.get("needs_analysis"):
-            print(f"[analyze] Found complete results for {region_name} from {start_date} to {end_date}")
-            return results
-        else:
-            prev_outputs = {"outputs": {}}
-            prev_outputs["outputs"] = results.get("outputs", {})
-            print(f"[analyze] Partial data found. Re-analyzing from {results['analyze_from']} to {end_date}")
-            start_date = results["analyze_from"]
-            data_payload["start_date"] = start_date  # Update payload with new start date
+            if not results.get("needs_analysis"):
+                print(f"[analyze] Found complete results for {region_name} from {start_date} to {end_date}")
+                return results
+            else:
+                prev_outputs = {"outputs": {}}
+                prev_outputs["outputs"] = results.get("outputs", {})
+                print(f"[analyze] Partial data found. Re-analyzing from {results['analyze_from']} to {end_date}")
+                start_date = results["analyze_from"]
+                data_payload["start_date"] = start_date  # Update payload with new start date
 
         # Prepare files payload
         hydrosens_url = os.getenv("HYDROSENS_URL")
