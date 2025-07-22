@@ -223,7 +223,10 @@ def generate_report():
         return jsonify({"error": "CSV file not found or invalid"}), 404
     json_data['region'] = region_name
     json_data['coordinates'] = coordinates
-    
+    json_data['time_period'] = {
+        "start_date": start_date,
+        "end_date": end_date
+    }
     try:
         # Run report generation and get the output PDF path
         pdf_file_path = run_generate_report(json_data, report_filename)
