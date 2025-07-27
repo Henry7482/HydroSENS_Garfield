@@ -42,26 +42,7 @@ def analyze():
     except json.JSONDecodeError:
         return jsonify({"error": "Invalid request body."}), 400
 
-    try:
-        output_master = os.getenv("OUTPUT_MASTER", "./data/output")
-        region_name = data_payload["region_name"]
-        start_date = data_payload["start_date"]
-        end_date = data_payload["end_date"]
-        region_csv_path = os.path.join(output_master, f"{region_name}.csv")
-        
-        # Check if we already have results for this request
-        if os.path.exists(region_csv_path):
-            results = get_json_from_region_csv(region_csv_path, start_date, end_date, check_range=True)
-            if not results.get("needs_analysis"):
-                print(f"[analyze] Found complete results for {region_name} from {start_date} to {end_date}")
-                return results
-            else:
-                prev_outputs = {"outputs": {}}
-                prev_outputs["outputs"] = results.get("outputs", {})
-                print(f"[analyze] Partial data found. Re-analyzing from {results['analyze_from']} to {end_date}")
-                start_date = results["analyze_from"]
-                data_payload["start_date"] = start_date  # Update payload with new start date
-
+    try:        
         # Prepare files payload
         hydrosens_url = os.getenv("HYDROSENS_URL")
         if not hydrosens_url:
@@ -208,12 +189,18 @@ def generate_report():
     data = request.get_json()
     if not data:
         return jsonify({"error": "Invalid JSON payload"}), 400
+    
     region_name = data.get("region_name", "Unknown Region")
     start_date = data.get("start_date")
     end_date = data.get("end_date")
     coordinates = data.get("coordinates", [])
+    amc = data.get("amc")
+    precipitation = data.get("precipitation")
+    crs = data.get("crs", "EPSG:4326")
+    endmember = data.get("endmember", 3)
+    
     if not region_name or not start_date or not end_date or not coordinates:
-        return jsonify({"error": "Missing required parameters"}), 400
+        return jsonify({"error": "Missing required parameters: region_name, start_date, end_date, coordinates"}), 400
     
     # Find cached report data
     pdf_file_path = generate_unique_file_path(region_name, start_date, end_date, extension=".pdf")
@@ -227,24 +214,76 @@ def generate_report():
         )
 
     report_filename = generate_unique_key(region_name, start_date, end_date)
-    csv_file_path = os.path.join(output_master, f"{region_name}.csv")
 
-    if os.path.exists(csv_file_path):
-        json_data = get_json_from_region_csv(csv_file_path, start_date, end_date, check_range=False)
+    # Fetch json_data from hydrosens API
+    try:
+        # Prepare data payload for HydroSENS API
+        data_payload = {
+            "region_name": region_name,
+            "start_date": start_date,
+            "end_date": end_date,
+            "amc": amc,
+            "precipitation": precipitation,
+            "crs": crs,
+            "num_coordinates": len(coordinates),
+            "coordinates": coordinates,
+            "endmember": endmember
+        }
+        
+        # Get HydroSENS URL
+        hydrosens_url = os.getenv("HYDROSENS_URL")
+        if not hydrosens_url:
+            print("[generate_report] HYDROSENS_URL not set")
+            return jsonify({"error": "HYDROSENS_URL environment variable is not set"}), 500
+        hydrosens_url = hydrosens_url.rstrip("/") + "/hydrosens"
+        
+        print(f"[generate_report] Fetching data from HydroSENS at {hydrosens_url}")
+        
+        # Send request to HydroSENS API
+        response = requests.post(hydrosens_url, json=data_payload, timeout=None)
+        print(f"[generate_report] HydroSENS responded with status {response.status_code}")
+        
+        if response.status_code != 200:
+            try:
+                error_data = response.json()
+                return jsonify({"error": f"HydroSENS API failed: {error_data.get('error', 'Unknown error')}"}), response.status_code
+            except:
+                return jsonify({"error": f"HydroSENS API failed with status {response.status_code}"}), response.status_code
+        
+        # Parse the response data
+        hydrosens_response = response.json()
+        
+        # Check if the response was successful
+        if not hydrosens_response.get('success'):
+            error_msg = hydrosens_response.get('error', 'HydroSENS analysis failed')
+            return jsonify({"error": error_msg}), 500
+        
+        # Extract the outputs data
+        json_data = {}
+        json_data['outputs'] = hydrosens_response.get('outputs', {})
+        
+        # Add additional metadata to json_data
+        json_data['region'] = region_name
+        json_data['coordinates'] = coordinates
+        json_data['time_period'] = {
+            "start_date": start_date,
+            "end_date": end_date
+        }
+        json_data['parameters'] = hydrosens_response.get('parameters', {})
+        
+        print(f"[generate_report] Retrieved data for {len(json_data.get('outputs', {}))} dates")
+        
+    except requests.exceptions.RequestException as e:
+        print(f"[generate_report] Request to HydroSENS failed: {str(e)}")
+        return jsonify({"error": f"Failed to connect to HydroSENS API: {str(e)}"}), 500
+    except Exception as e:
+        print(f"[generate_report] Error fetching data from HydroSENS: {str(e)}")
+        return jsonify({"error": f"Failed to fetch data from HydroSENS: {str(e)}"}), 500
 
-    else:
-        return jsonify({"error": "CSV file not found or invalid"}), 404
-    json_data['region'] = region_name
-    json_data['coordinates'] = coordinates
-    json_data['time_period'] = {
-        "start_date": start_date,
-        "end_date": end_date
-    }
     try:
         # Run report generation and get the output PDF path
         pdf_file_path = run_generate_report(json_data, report_filename)
-        # pdf_file_path = run_generate_report(report_data) # DEMO ONLY
-
+        
         # Send the file to the user
         return send_file(
             pdf_file_path,
@@ -254,7 +293,7 @@ def generate_report():
         )
     except Exception as e:
         app.logger.error(f"Report generation failed: {str(e)}")
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"error": f"Report generation failed: {str(e)}"}), 500
 
 
 
