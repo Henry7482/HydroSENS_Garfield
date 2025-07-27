@@ -214,11 +214,19 @@ def get_csv_file():
     return send_file(csv_file_path, mimetype='text/csv', as_attachment=True, download_name='output.csv')
 
 
-@app.route('/hydrosens/export-latest-tifs', methods=['GET'])
+@app.route('/hydrosens/export-tifs', methods=['GET'])
 def export_tifs_zip():
-    """Create and return a zip of all .tif files in output directory."""
+    """Create and return a zip of .tif files within the specified date range."""
     import zipfile
     from io import BytesIO
+    from datetime import datetime
+
+    # Get date range parameters
+    start_date = request.args.get('start_date')
+    end_date = request.args.get('end_date')
+    
+    if not start_date or not end_date:
+        return jsonify({"error": "Missing required parameters: start_date, end_date"}), 400
 
     output_master = os.getenv('OUTPUT_MASTER', '/app/data/output')
     zip_buffer = BytesIO()
@@ -227,28 +235,65 @@ def export_tifs_zip():
         return jsonify({"error": "Output folder does not exist"}), 404
 
     try:
+        # Parse date range for filtering
+        start_dt = datetime.strptime(start_date, '%Y-%m-%d')
+        end_dt = datetime.strptime(end_date, '%Y-%m-%d')
+        
+        tif_files_found = False
+        
         with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zipf:
             for date_folder in os.listdir(output_master):
                 date_path = os.path.join(output_master, date_folder)
-                if os.path.isdir(date_path):
-                    for file_name in os.listdir(date_path):
-                        if file_name.endswith('.tif'):
-                            file_path = os.path.join(date_path, file_name)
-                            arcname = os.path.join(date_folder, file_name)
-                            zipf.write(file_path, arcname=arcname)
+                
+                # Skip if not a directory
+                if not os.path.isdir(date_path):
+                    continue
+                
+                try:
+                    # Parse folder name as date (assuming YYYY-MM-DD format)
+                    folder_dt = datetime.strptime(date_folder, '%Y-%m-%d')
+                    
+                    # Check if folder date is within the specified range
+                    if start_dt <= folder_dt <= end_dt:
+                        print(f"Including date folder: {date_folder}")
+                        
+                        # Add all .tif files from this date folder
+                        for file_name in os.listdir(date_path):
+                            if file_name.endswith('.tif'):
+                                file_path = os.path.join(date_path, file_name)
+                                arcname = os.path.join(date_folder, file_name)
+                                zipf.write(file_path, arcname=arcname)
+                                tif_files_found = True
+                                print(f"Added to zip: {arcname}")
+                    else:
+                        print(f"Skipping date folder outside range: {date_folder}")
+                        
+                except ValueError:
+                    # Skip folders that don't match date format
+                    print(f"Skipping non-date folder: {date_folder}")
+                    continue
+
+        if not tif_files_found:
+            return jsonify({
+                "error": f"No TIF files found for date range {start_date} to {end_date}"
+            }), 404
 
         zip_buffer.seek(0)
         return send_file(
             zip_buffer,
             mimetype='application/zip',
             as_attachment=True,
-            download_name='tif_outputs.zip'
+            download_name=f'tif_outputs_{start_date}_to_{end_date}.zip'
         )
 
+    except ValueError as e:
+        return jsonify({
+            "error": f"Invalid date format. Expected YYYY-MM-DD. Error: {str(e)}"
+        }), 400
     except Exception as e:
         app.logger.error(f"Error creating TIF zip: {str(e)}")
         return jsonify({"error": f"Failed to create TIF zip: {str(e)}"}), 500
-
+    
 if __name__ == "__main__":
     import logging
     logging.basicConfig(level=logging.INFO)

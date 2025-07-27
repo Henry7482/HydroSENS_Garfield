@@ -89,22 +89,7 @@ def analyze():
                     save_region_csv(region_name, csv_file.content, output_master)
                 else:
                     print(f"[analyze] CSV download failed with status {csv_file.status_code}")
-                
-                # Download zipped TIFs
-                tif_zip = requests.get(hydrosens_url + "/export-latest-tifs")
-                if tif_zip.status_code == 200:
-                    tif_zip_path = generate_unique_file_path(
-                        data_payload["region_name"],
-                        data_payload["start_date"],
-                        data_payload["end_date"],
-                        extension=".zip"
-                    )
-                    with open(tif_zip_path, "wb") as f:
-                        f.write(tif_zip.content)
-                    print(f"[analyze] TIF zip saved at: {tif_zip_path}")
-                else:
-                    print(f"[analyze] TIF zip download failed with status {tif_zip.status_code}")
-                
+                                
                 # Return the CSV data if available, otherwise return the response data
                 if os.path.exists(region_csv_path):
                     if not prev_outputs:
@@ -153,18 +138,58 @@ def get_tif_zip():
     data = request.get_json()
     if not data:
         return jsonify({"error": "Invalid JSON payload"}), 400
+    
     regionName = data.get("region_name", "Unknown Region")
     startDate = data.get("start_date")
     endDate = data.get("end_date")
+    
     if not regionName or not startDate or not endDate:
         return jsonify({"error": "Missing required parameters: region_name, start_date, end_date"}), 400
-
-    zip_file_path = generate_unique_file_path(regionName, startDate, endDate, extension=".zip")
-    print('Getting tif files from:', zip_file_path)
-    if not os.path.exists(zip_file_path):
-        return jsonify({"error": "TIF ZIP file not found."}), 404
-
-    return send_file(zip_file_path, mimetype='application/zip', as_attachment=True, download_name='tif_outputs.zip')
+    
+    try:
+        # Forward request to HydroSENS API
+        hydrosens_url = os.getenv("HYDROSENS_URL")
+        if not hydrosens_url:
+            print("[get_tif_zip] HYDROSENS_URL not set")
+            return jsonify({"error": "HYDROSENS_URL environment variable is not set"}), 500
+        
+        hydrosens_url = hydrosens_url.rstrip("/") + "/hydrosens/export-tifs"
+        
+        print(f"[get_tif_zip] Forwarding TIF export request to HydroSENS at {hydrosens_url}")
+        
+        # Forward the request with date range parameters
+        response = requests.get(
+            hydrosens_url,
+            params={
+                "start_date": startDate,
+                "end_date": endDate
+            },
+            timeout=300  # 5 minute timeout for zip creation
+        )
+        
+        if response.status_code == 200:
+            # Create a BytesIO object from the response content
+            zip_buffer = BytesIO(response.content)
+            
+            return send_file(
+                zip_buffer,
+                mimetype='application/zip',
+                as_attachment=True,
+                download_name='tif_outputs.zip'
+            )
+        
+        else:
+            try:
+                error_data = response.json()
+                return jsonify(error_data), response.status_code
+            except:
+                return jsonify({
+                    "error": f"HydroSENS TIF export failed with status {response.status_code}"
+                }), response.status_code
+                
+    except Exception as e:
+        print(f"[get_tif_zip] Exception: {str(e)}")
+        return jsonify({"error": str(e)}), 500
 
 @app.route('/analyze/export-csv', methods=['POST'])
 def get_csv_file():
@@ -177,13 +202,59 @@ def get_csv_file():
     endDate = data.get("end_date")
     if not regionName or not startDate or not endDate:
         return jsonify({"error": "Missing required parameters: region_name, start_date, end_date"}), 400
-    csv_file_path = generate_unique_file_path(regionName, startDate, endDate, extension=".csv")
+    
+    output_master = os.getenv("OUTPUT_MASTER", "./data/output")
+    csv_file_path = os.path.join(output_master, f"{regionName}.csv")
 
     if not os.path.exists(csv_file_path):
         return jsonify({"error": "CSV output file not found."}), 404
 
-    return send_file(csv_file_path, mimetype='text/csv', as_attachment=True, download_name='output.csv')
-
+    try:
+        # Get filtered data using the existing helper function
+        filtered_data = get_json_from_region_csv(csv_file_path, startDate, endDate, check_range=False)
+        
+        # Convert the filtered JSON data back to CSV format
+        import pandas as pd
+        import io
+        
+        # Extract the outputs data
+        outputs = filtered_data.get("outputs", {})
+        
+        if not outputs:
+            return jsonify({"error": "No data found for the specified date range"}), 404
+        
+        # Convert to DataFrame for CSV export
+        rows = []
+        for date, values in outputs.items():
+            row = {"date": date}
+            row.update(values)
+            rows.append(row)
+        
+        df = pd.DataFrame(rows)
+        df = df.sort_values('date')  # Sort by date
+        
+        # Create CSV in memory
+        csv_buffer = io.StringIO()
+        df.to_csv(csv_buffer, index=False)
+        csv_content = csv_buffer.getvalue()
+        csv_buffer.close()
+        
+        # Create a BytesIO object for send_file
+        csv_bytes = io.BytesIO()
+        csv_bytes.write(csv_content.encode('utf-8'))
+        csv_bytes.seek(0)
+        
+        return send_file(
+            csv_bytes, 
+            mimetype='text/csv', 
+            as_attachment=True, 
+            download_name=f'{regionName}_{startDate}_to_{endDate}.csv'
+        )
+        
+    except Exception as e:
+        print(f"[get_csv_file] Error filtering CSV data: {str(e)}")
+        return jsonify({"error": f"Failed to filter CSV data: {str(e)}"}), 500
+    
 @app.route('/generate-report', methods=['POST'])
 def generate_report():
     output_master = os.getenv("OUTPUT_MASTER", "./data/output")

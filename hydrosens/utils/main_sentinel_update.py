@@ -29,19 +29,7 @@ def run_hydrosens(main_folder, start_date, end_date, output_master, amc, p, coor
         endmember: Number of endmembers for MESMA (2 or 3, default: 3)
                   3 = vegetation, impervious, soil
                   2 = vegetation, soil (no impervious)
-    """
-    # Clear all contents of the output_master directory
-    if os.path.exists(output_master):
-        for filename in os.listdir(output_master):
-            file_path = os.path.join(output_master, filename)
-            try:
-                if os.path.isfile(file_path) or os.path.islink(file_path):
-                    os.unlink(file_path)  # remove file or symlink
-                elif os.path.isdir(file_path):
-                    shutil.rmtree(file_path)  # remove directory
-            except Exception as e:
-                print(f'Failed to delete {file_path}. Reason: {e}')
-    
+    """    
     # Convert coordinates to Earth Engine geometry
     aoi = coordinates_to_ee_geometry(coordinates)
     
