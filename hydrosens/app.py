@@ -115,20 +115,7 @@ def run_hydrosens_endpoint():
     output_master = os.getenv('OUTPUT_MASTER', '/app/data/output')
     
     try:
-        # Parse JSON data from request
-        if request.is_json:
-            data = request.get_json()
-        else:
-            # Fallback to form data for backward compatibility
-            data = {
-                'start_date': request.form.get('start_date'),
-                'end_date': request.form.get('end_date'),
-                'amc': request.form.get('amc'),
-                'precipitation': request.form.get('p') or request.form.get('precipitation'),
-                'coordinates': json.loads(request.form.get('coordinates', '[]')),
-                'crs': request.form.get('crs', 'EPSG:4326'),
-                'endmember': request.form.get('endmember')
-            }
+        data = request.get_json()
         
         # Extract parameters
         start_date = data.get('start_date')
@@ -144,58 +131,13 @@ def run_hydrosens_endpoint():
             missing = []
             if not start_date: missing.append('start_date')
             if not end_date: missing.append('end_date') 
+            if not amc: missing.append('amc')
+            if not precipitation: missing.append('precipitation')
             if not coordinates: missing.append('coordinates')
+            if not crs: missing.append('crs')
+            if not endmember: missing.append('endmember')
             return jsonify({
                 "error": f"Missing required parameters: {', '.join(missing)}"
-            }), 400
-        
-        # Validate and convert parameters
-        try:
-            amc = int(amc) if amc else 2
-            precipitation = float(precipitation) if precipitation else 10.0
-            # Handle endmember parameter - default to 3 if not 2
-            if endmember is not None:
-                endmember = int(endmember)
-                if endmember != 2:
-                    endmember = 3
-            else:
-                endmember = 3
-        except (ValueError, TypeError):
-            return jsonify({
-                "error": "Invalid parameter types. amc must be integer, precipitation must be number, endmember must be integer"
-            }), 400
-        
-        # Validate coordinates
-        if not isinstance(coordinates, list) or len(coordinates) < 3:
-            return jsonify({
-                "error": "Coordinates must be a list of at least 3 coordinate pairs"
-            }), 400
-        
-        for i, coord in enumerate(coordinates):
-            if not isinstance(coord, list) or len(coord) != 2:
-                return jsonify({
-                    "error": f"Coordinate {i} must be a list of exactly 2 numbers [longitude, latitude]"
-                }), 400
-            
-            try:
-                lon, lat = float(coord[0]), float(coord[1])
-                if crs.upper() == 'EPSG:4326':
-                    if not (-180 <= lon <= 180):
-                        return jsonify({
-                            "error": f"Longitude {lon} at coordinate {i} is out of range [-180, 180]"
-                        }), 400
-                    if not (-90 <= lat <= 90):
-                        return jsonify({
-                            "error": f"Latitude {lat} at coordinate {i} is out of range [-90, 90]"
-                        }), 400
-            except (ValueError, TypeError):
-                return jsonify({
-                    "error": f"Coordinate {i} must contain numeric values"
-                }), 400
-        
-        if amc not in [1, 2, 3]:
-            return jsonify({
-                "error": "AMC (Antecedent Moisture Condition) must be 1, 2, or 3"
             }), 400
         
         # Create output directory

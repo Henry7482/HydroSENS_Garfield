@@ -22,30 +22,25 @@ import json
 @app.route("/analyze", methods=["POST"])
 def analyze():
     data = request.get_json()
-    if not data:
-        return jsonify({"error": "Invalid JSON payload"}), 400
     
-    statistics = data.get("statistics", "").strip().lower()
-    if statistics != HYDROSENS_STATISTICS:
-        return jsonify({"error": "Invalid statistics parameter"}), 400
+    # TODO: In future versions, use this param to map to different HydroSENS versions
+    # statistics = data.get("statistics", "").strip().lower()
 
     # Prepare data payload
     try:
-        coordinates = data.get("coordinates")
+        data_payload = {
+            "region_name": data.get("region_name", "Unknown Region"),
+            "start_date": data.get("start_date"),
+            "end_date": data.get("end_date"),
+            "amc": data.get("amc"),
+            "precipitation": data.get("precipitation"),
+            "crs": data.get("crs", "EPSG:4326"),
+            "num_coordinates": data.get("num_coordinates", 0),
+            "coordinates": data.get("coordinates"),
+            "endmember": data.get("endmember", 3)  # Extract endmember parameter with default value 3
+        }
     except json.JSONDecodeError:
-        return jsonify({"error": "Invalid coordinates format. Must be a valid JSON array."}), 400
-
-    data_payload = {
-        "region_name": data.get("region_name", "Unknown Region"),
-        "start_date": data.get("start_date"),
-        "end_date": data.get("end_date"),
-        "amc": data.get("amc"),
-        "precipitation": data.get("precipitation"),
-        "crs": data.get("crs", "EPSG:4326"),
-        "num_coordinates": data.get("num_coordinates", 0),
-        "coordinates": coordinates,
-        "endmember": data.get("endmember", 3)  # Extract endmember parameter with default value 3
-    }
+        return jsonify({"error": "Invalid request body."}), 400
 
     try:
         output_master = os.getenv("OUTPUT_MASTER", "./data/output")
