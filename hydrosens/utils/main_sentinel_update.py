@@ -41,6 +41,8 @@ def run_hydrosens(main_folder, region_name, dates_to_process, output_master, amc
 def process_specific_dates(dates_to_process, aoi, output_master, region_name, amc, p, coordinates, crs, endmember=3):
     """Process Sentinel-2 images for specific dates if imagery exists."""
 
+    all_weather_data = get_daily_weather(dates_to_process, aoi)
+
     HSG250m = os.getenv("HSG250m")
     sli = os.getenv("SLI")
     dates_with_images = []
@@ -83,14 +85,17 @@ def process_specific_dates(dates_to_process, aoi, output_master, region_name, am
         Bandsexport(resample_img, crs_string, output, aoi)
         DEMexport(DEM, crs_string, output, aoi)
 
-        target = CDS_temp(date, output)
-        df = extract_data(target)
-        print("Using coordinate-based AOI")
-        avg_temp = get_temp(coordinates, df)
-
-        target = CDS_precip(date, output)
-        df = extract_p_data(target)
-        avg_p = get_p(coordinates, df)
+        weather_day = all_weather_data.get(date.strftime('%Y-%m-%d'))
+        if weather_day:
+            temperature = weather_day['temperature']
+            precipitation = weather_day['precipitation']
+            avg_temp.append(temperature)
+            avg_p.append(precipitation)
+        else:
+            # Handle cases where weather data might be missing for a day
+            print("[temp] NO TEMP DATA FOUND")
+            avg_temp.append(0)
+            avg_p.append(0)
 
         bands = gdal.Open(output + r"/Bands.tif")
         band_array = bands.ReadAsArray()
@@ -520,8 +525,8 @@ def process_specific_dates(dates_to_process, aoi, output_master, region_name, am
             "ndvi": nan_to_zero(ndvi_values[i]),
             "soil-fraction": nan_to_zero(soil_values[i]),
             "vegetation-fraction": nan_to_zero(vegetation_values[i]),
-            "precipitation": nan_to_zero(avg_p),
-            "temperature": nan_to_zero(avg_temp),
+            "precipitation": float(np.mean(avg_p)),
+            "temperature": float(np.mean(avg_temp)),
             "curve-number": nan_to_zero(curve_number[i])
         }
 
@@ -542,7 +547,7 @@ def create_output_folder(base_output, region_name, date):
 
 
 # Updated convenience function for the coordinate-based approach
-def run_hydrosens_with_coordinates(region_name, coordinates, dates_to_process=None, start_date=None, end_date=None, output_dir=None, amc=2, precipitation=10.0, crs='EPSG:4326', endmember=3):
+def run_hydrosens_with_coordinates(region_name, coordinates, dates_to_process, output_dir=None, amc=2, precipitation=10.0, crs='EPSG:4326', endmember=3):
     """
     Convenience function to run Hydrosens analysis with coordinate array
     
@@ -578,32 +583,8 @@ def run_hydrosens_with_coordinates(region_name, coordinates, dates_to_process=No
         if not (-90 <= coord[1] <= 90):
             raise ValueError(f"Latitude {coord[1]} at position {i} is out of valid range [-90, 90]")
     
-    # Handle dates - prioritize dates_to_process, fallback to start/end date range
-    if dates_to_process is not None:
-        if not dates_to_process:
-            raise ValueError("dates_to_process cannot be empty")
-        process_dates = dates_to_process
-        print(f"Processing {len(process_dates)} specific dates")
-    elif start_date and end_date:
-        # Convert date range to list of dates for backward compatibility
-        if isinstance(start_date, str):
-            start_dt = datetime.strptime(start_date, '%Y-%m-%d')
-        else:
-            start_dt = start_date
-        
-        if isinstance(end_date, str):
-            end_dt = datetime.strptime(end_date, '%Y-%m-%d')
-        else:
-            end_dt = end_date
-        
-        process_dates = []
-        current_date = start_dt
-        while current_date <= end_dt:
-            process_dates.append(current_date)
-            current_date += timedelta(days=1)
-        print(f"Converting date range {start_date} to {end_date} into {len(process_dates)} dates")
-    else:
-        raise ValueError("Either provide dates_to_process or both start_date and end_date")
+    process_dates = dates_to_process
+    print(f"Processing {len(process_dates)} specific dates")
     
     # Validate endmember parameter - default to 3 if not 2
     if endmember != 2:
