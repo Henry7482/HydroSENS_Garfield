@@ -149,12 +149,58 @@ def get_csv_file():
     data = request.get_json()
     if not data:
         return jsonify({"error": "Invalid JSON payload"}), 400
+    
     regionName = data.get("region_name", "Unknown Region")
     startDate = data.get("start_date")
     endDate = data.get("end_date")
+    
     if not regionName or not startDate or not endDate:
         return jsonify({"error": "Missing required parameters: region_name, start_date, end_date"}), 400
     
+    try:
+        # Forward request to HydroSENS API
+        hydrosens_url = os.getenv("HYDROSENS_URL")
+        if not hydrosens_url:
+            print("[get_csv_file] HYDROSENS_URL not set")
+            return jsonify({"error": "HYDROSENS_URL environment variable is not set"}), 500
+        
+        hydrosens_url = hydrosens_url.rstrip("/") + "/hydrosens/csv-file"
+        
+        print(f"[get_csv_file] Forwarding CSV export request to HydroSENS at {hydrosens_url}")
+        
+        # Forward the request with parameters
+        response = requests.get(
+            hydrosens_url,
+            params={
+                "region_name": regionName,
+                "start_date": startDate,
+                "end_date": endDate
+            }
+        )
+        
+        if response.status_code == 200:
+            # Create a BytesIO object from the response content
+            csv_buffer = BytesIO(response.content)
+            
+            return send_file(
+                csv_buffer,
+                mimetype='text/csv',
+                as_attachment=True,
+                download_name=f'{regionName}_output.csv'
+            )
+        
+        else:
+            try:
+                error_data = response.json()
+                return jsonify(error_data), response.status_code
+            except:
+                return jsonify({
+                    "error": f"HydroSENS CSV export failed with status {response.status_code}"
+                }), response.status_code
+                
+    except Exception as e:
+        print(f"[get_csv_file] Exception: {str(e)}")
+        return jsonify({"error": str(e)}), 500
     
 @app.route('/generate-report', methods=['POST'])
 def generate_report():

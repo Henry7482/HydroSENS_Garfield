@@ -413,19 +413,93 @@ def run_hydrosens_endpoint():
 
 @app.route('/hydrosens/csv-file', methods=['GET'])
 def get_csv_file():
-    """Endpoint to retrieve the CSV output file."""
-    # Get region_name from query parameters
+    """Endpoint to retrieve the CSV output file with date range filtering."""
+    # Get parameters from query string
     region_name = request.args.get('region_name', 'Unknown Region')
+    start_date = request.args.get('start_date')
+    end_date = request.args.get('end_date')
+    
+    # Validate required parameters
+    if not start_date or not end_date:
+        return jsonify({"error": "Missing required parameters: start_date, end_date"}), 400
     
     output_master = os.getenv('OUTPUT_MASTER', '/app/data/output')
-    # Update path to include region folder
     csv_file_path = os.path.join(output_master, region_name, 'output.csv')
 
     if not os.path.exists(csv_file_path):
-        return jsonify({"error": "CSV output file not found."}), 404
+        return jsonify({"error": f"CSV output file not found for region '{region_name}'."}), 404
 
-    return send_file(csv_file_path, mimetype='text/csv', as_attachment=True, download_name='output.csv')
+    try:
+        import pandas as pd
+        from datetime import datetime
+        from io import StringIO
+        
+        # Parse date range
+        start_dt = datetime.strptime(start_date, '%Y-%m-%d')
+        end_dt = datetime.strptime(end_date, '%Y-%m-%d')
+        
+        # Read the CSV file
+        df = pd.read_csv(csv_file_path)
+        
+        # Convert date column to datetime for filtering
+        df['date'] = pd.to_datetime(df['date'])
+        
+        # Filter by date range
+        filtered_df = df[
+            (df['date'] >= start_dt) & 
+            (df['date'] <= end_dt)
+        ].copy()
+        
+        # Filter out NO DATA rows
+        # Check if any of the main columns contain 'NO DATA'
+        no_data_mask = (
+            (filtered_df['veg_mean'].astype(str).str.upper() == 'NO DATA') |
+            (filtered_df['soil_mean'].astype(str).str.upper() == 'NO DATA') |
+            (filtered_df['curve_number'].astype(str).str.upper() == 'NO DATA') |
+            (filtered_df['ndvi'].astype(str).str.upper() == 'NO DATA') |
+            (filtered_df['temperature'].astype(str).str.upper() == 'NO DATA') |
+            (filtered_df['precipitation'].astype(str).str.upper() == 'NO DATA')
+        )
+        
+        # Keep only rows that don't have NO DATA
+        filtered_df = filtered_df[~no_data_mask]
+        
+        # Convert date back to string format for CSV output
+        filtered_df['date'] = filtered_df['date'].dt.strftime('%Y-%m-%d')
+        
+        # Sort by date
+        filtered_df = filtered_df.sort_values('date')
+        
+        print(f"CSV export for region '{region_name}': {len(filtered_df)} rows in date range {start_date} to {end_date} (NO DATA rows excluded)")
+        
+        if filtered_df.empty:
+            return jsonify({
+                "error": f"No valid data found for region '{region_name}' in date range {start_date} to {end_date}"
+            }), 404
+        
+        # Create CSV content in memory
+        csv_buffer = StringIO()
+        filtered_df.to_csv(csv_buffer, index=False)
+        csv_content = csv_buffer.getvalue()
+        
+        # Convert to BytesIO for send_file
+        from io import BytesIO
+        csv_bytes = BytesIO(csv_content.encode('utf-8'))
+        
+        return send_file(
+            csv_bytes,
+            mimetype='text/csv',
+            as_attachment=True,
+            download_name=f'{region_name}_{start_date}_to_{end_date}_output.csv'
+        )
 
+    except ValueError as e:
+        return jsonify({
+            "error": f"Invalid date format. Expected YYYY-MM-DD. Error: {str(e)}"
+        }), 400
+    except Exception as e:
+        app.logger.error(f"Error processing CSV file: {str(e)}")
+        return jsonify({"error": f"Failed to process CSV file: {str(e)}"}), 500
 
 @app.route('/hydrosens/export-tifs', methods=['GET'])
 def export_tifs_zip():
