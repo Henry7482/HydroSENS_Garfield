@@ -87,15 +87,25 @@ def check_existing_data(output_master, region_name, requested_dates):
             df = pd.read_csv(csv_file_path)
             print(f"Found existing CSV with {len(df)} rows")
             
-            # Check which requested dates already have complete data
+            # Check which requested dates already have complete data OR are marked as NO DATA
             for date_str in requested_date_strings:
                 date_rows = df[df['date'] == date_str]
                 if len(date_rows) > 0:
-                    # Check if the row has all required columns with non-null values
-                    required_columns = ['veg_mean', 'soil_mean', 'curve_number', 'ndvi', 'temperature', 'precipitation']
                     row = date_rows.iloc[0]
                     
-                    if all(pd.notna(row.get(col)) for col in required_columns):
+                    # Check if this date is marked as NO DATA
+                    if (pd.notna(row.get('veg_mean')) and 
+                        str(row.get('veg_mean')).upper() == 'NO DATA'):
+                        print(f"Date {date_str} marked as NO DATA, skipping processing")
+                        dates_to_process.remove(date_str)
+                        # Don't add NO DATA entries to existing_data (they won't be returned to API)
+                        continue
+                    
+                    # Check if the row has all required columns with valid numeric data
+                    required_columns = ['veg_mean', 'soil_mean', 'curve_number', 'ndvi', 'temperature', 'precipitation']
+                    
+                    if all(pd.notna(row.get(col)) and 
+                          str(row.get(col)).upper() != 'NO DATA' for col in required_columns):
                         print(f"Date {date_str} already has complete data, skipping processing")
                         existing_data[date_str] = {
                             "ndvi": float(row.get('ndvi', 0)),
@@ -126,20 +136,19 @@ def check_existing_data(output_master, region_name, requested_dates):
     
     return dates_to_process_dt, existing_data
 
-def append_to_csv(output_master, region_name, new_data):
+def append_to_csv(output_master, region_name, new_data, no_data_dates=None):
     """
     Append new data to the CSV file, maintaining chronological order.
+    Also marks dates with no data as "NO DATA".
     """
     csv_file_path = os.path.join(output_master, region_name, 'output.csv')
     region_output_dir = os.path.join(output_master, region_name)
     os.makedirs(region_output_dir, exist_ok=True)
     
-    if not new_data:
-        print("No new data to append")
-        return csv_file_path
-    
     # Convert new data to DataFrame format
     new_rows = []
+    
+    # Add successful processing results
     for date_str, values in new_data.items():
         row = {
             'date': date_str,
@@ -151,6 +160,25 @@ def append_to_csv(output_master, region_name, new_data):
             'precipitation': values.get('precipitation', 0)
         }
         new_rows.append(row)
+    
+    # Add NO DATA entries for dates with no imagery
+    if no_data_dates:
+        for date_str in no_data_dates:
+            row = {
+                'date': date_str,
+                'veg_mean': 'NO DATA',
+                'soil_mean': 'NO DATA',
+                'curve_number': 'NO DATA',
+                'ndvi': 'NO DATA',
+                'temperature': 'NO DATA',
+                'precipitation': 'NO DATA'
+            }
+            new_rows.append(row)
+        print(f"Marking {len(no_data_dates)} dates as NO DATA: {no_data_dates}")
+    
+    if not new_rows:
+        print("No new data to append")
+        return csv_file_path
     
     new_df = pd.DataFrame(new_rows)
     new_df = new_df.sort_values('date')
@@ -235,10 +263,18 @@ def run_hydrosens_background(thread_id, region_name, coordinates, start_date, en
                 endmember=endmember
             )
             
-            # Step 5: Append the new results to the CSV file
-            csv_path = append_to_csv(output_dir, region_name, new_results)
+            # Step 5: Determine which dates had no data (were requested but not in results)
+            processed_date_strings = set(new_results.keys())
+            requested_date_strings = set(date.strftime('%Y-%m-%d') for date in dates_to_process)
+            no_data_dates = list(requested_date_strings - processed_date_strings)
             
-            # Step 6: Return combined result
+            if no_data_dates:
+                print(f"Found {len(no_data_dates)} dates with no Sentinel-2 imagery available")
+            
+            # Step 6: Append the new results to the CSV file, including NO DATA markers
+            csv_path = append_to_csv(output_dir, region_name, new_results, no_data_dates)
+            
+            # Step 7: Return combined result (excluding NO DATA entries)
             combined_results = {**existing_data, **new_results}
             
             current_result = {
@@ -255,7 +291,8 @@ def run_hydrosens_background(thread_id, region_name, coordinates, start_date, en
                     'endmember': endmember,
                     'num_coordinates': len(coordinates),
                     'dates_from_cache': len(existing_data),
-                    'dates_processed': len(new_results)
+                    'dates_processed': len(new_results),
+                    'dates_no_data': len(no_data_dates)
                 },
                 'outputs': combined_results
             }
