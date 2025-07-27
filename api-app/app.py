@@ -243,42 +243,6 @@ def generate_report():
         app.logger.error(f"Report generation failed: {str(e)}")
         return jsonify({"error": str(e)}), 500
 
-   
-@app.route('/convert', methods=['POST'])
-def convert_coordinates():
-    data = request.get_json()
-    
-    coordinates = data.get("coordinates")
-    if not isinstance(coordinates, list) or not all(isinstance(p, list) and len(p) == 2 for p in coordinates):
-        return jsonify(error="Request must include a 'coordinates' field with an array of [lat, lon] pairs."), 400
-
-    results = []
-    for lat, lon in coordinates:
-        try:
-            zone = lon_to_utm_zone(lon)
-            is_northern = lat >= 0
-            epsg_code = 32600 + zone if is_northern else 32700 + zone
-            transformer = Transformer.from_crs("EPSG:4326", f"EPSG:{epsg_code}", always_xy=True)
-            x, y = transformer.transform(lon, lat)
-            wkt = build_utm_wkt(zone, is_northern)
-
-            results.append({
-                "input": {"lat": lat, "lon": lon},
-                "utm": {
-                    "zone": zone,
-                    "epsg": epsg_code,
-                    "x": round(x, 3),
-                    "y": round(y, 3),
-                    "wkt": wkt
-                }
-            })
-        except Exception as e:
-            results.append({
-                "input": {"lat": lat, "lon": lon},
-                "error": f"Projection failed: {str(e)}"
-            })
-
-    return jsonify(results)
 
 
 if __name__ == "__main__":
