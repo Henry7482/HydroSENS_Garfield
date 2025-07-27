@@ -8,9 +8,10 @@ import tempfile
 import threading
 import time
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta
 import ctypes
 import sys
+import pandas as pd
 
 app = Flask(__name__)
 
@@ -51,53 +52,213 @@ def terminate_thread(thread):
     except Exception as e:
         print(f"Error terminating thread: {str(e)}")
 
+def get_dates_from_range(start_date, end_date):
+    """Convert date range to list of dates"""
+    if isinstance(start_date, str):
+        start_date = datetime.strptime(start_date, '%Y-%m-%d')
+    if isinstance(end_date, str):
+        end_date = datetime.strptime(end_date, '%Y-%m-%d')
+    
+    dates = []
+    current_date = start_date
+    while current_date <= end_date:
+        dates.append(current_date)
+        current_date += timedelta(days=1)
+    
+    return dates
+
+def check_existing_data(output_master, region_name, requested_dates):
+    """
+    Check what data already exists in the CSV file and determine which dates need processing.
+    
+    Returns:
+        tuple: (dates_to_process, existing_data_dict)
+    """
+    csv_file_path = os.path.join(output_master, region_name, 'output.csv')
+    
+    # Convert requested dates to string format for comparison
+    requested_date_strings = [date.strftime('%Y-%m-%d') if isinstance(date, datetime) else date for date in requested_dates]
+    
+    existing_data = {}
+    dates_to_process = requested_date_strings.copy()
+    
+    if os.path.exists(csv_file_path):
+        try:
+            df = pd.read_csv(csv_file_path)
+            print(f"Found existing CSV with {len(df)} rows")
+            
+            # Check which requested dates already have complete data
+            for date_str in requested_date_strings:
+                date_rows = df[df['date'] == date_str]
+                if len(date_rows) > 0:
+                    # Check if the row has all required columns with non-null values
+                    required_columns = ['veg_mean', 'soil_mean', 'curve_number', 'ndvi', 'temperature', 'precipitation']
+                    row = date_rows.iloc[0]
+                    
+                    if all(pd.notna(row.get(col)) for col in required_columns):
+                        print(f"Date {date_str} already has complete data, skipping processing")
+                        existing_data[date_str] = {
+                            "ndvi": float(row.get('ndvi', 0)),
+                            "soil-fraction": float(row.get('soil_mean', 0)),
+                            "vegetation-fraction": float(row.get('veg_mean', 0)),
+                            "precipitation": float(row.get('precipitation', 0)),
+                            "temperature": float(row.get('temperature', 0)),
+                            "curve-number": float(row.get('curve_number', 0))
+                        }
+                        dates_to_process.remove(date_str)
+                    else:
+                        print(f"Date {date_str} has incomplete data, will reprocess")
+                else:
+                    print(f"Date {date_str} not found in existing data, will process")
+        except Exception as e:
+            print(f"Error reading existing CSV: {e}")
+            # If there's an error reading the CSV, process all dates
+            pass
+    else:
+        print(f"No existing CSV found at {csv_file_path}, will process all dates")
+    
+    # Convert dates_to_process back to datetime objects
+    dates_to_process_dt = [datetime.strptime(date_str, '%Y-%m-%d') for date_str in dates_to_process]
+    
+    print(f"Total requested dates: {len(requested_date_strings)}")
+    print(f"Dates with existing data: {len(existing_data)}")
+    print(f"Dates to process: {len(dates_to_process_dt)}")
+    
+    return dates_to_process_dt, existing_data
+
+def append_to_csv(output_master, region_name, new_data):
+    """
+    Append new data to the CSV file, maintaining chronological order.
+    """
+    csv_file_path = os.path.join(output_master, region_name, 'output.csv')
+    region_output_dir = os.path.join(output_master, region_name)
+    os.makedirs(region_output_dir, exist_ok=True)
+    
+    if not new_data:
+        print("No new data to append")
+        return csv_file_path
+    
+    # Convert new data to DataFrame format
+    new_rows = []
+    for date_str, values in new_data.items():
+        row = {
+            'date': date_str,
+            'veg_mean': values.get('vegetation-fraction', 0),
+            'soil_mean': values.get('soil-fraction', 0),
+            'curve_number': values.get('curve-number', 0),
+            'ndvi': values.get('ndvi', 0),
+            'temperature': values.get('temperature', 0),
+            'precipitation': values.get('precipitation', 0)
+        }
+        new_rows.append(row)
+    
+    new_df = pd.DataFrame(new_rows)
+    new_df = new_df.sort_values('date')
+    
+    # Check if CSV exists
+    if os.path.exists(csv_file_path):
+        try:
+            # Read existing CSV
+            existing_df = pd.read_csv(csv_file_path)
+            print(f"Found existing CSV with {len(existing_df)} rows")
+            
+            # Remove any rows for dates we're updating (in case of reprocessing)
+            new_dates = set(new_df['date'].tolist())
+            existing_df = existing_df[~existing_df['date'].isin(new_dates)]
+            
+            # Combine and sort
+            combined_df = pd.concat([existing_df, new_df], ignore_index=True)
+            combined_df = combined_df.sort_values('date').reset_index(drop=True)
+            
+            print(f"Appending {len(new_df)} new rows to existing {len(existing_df)} rows")
+            
+        except Exception as e:
+            print(f"Error reading existing CSV: {e}. Creating new file.")
+            combined_df = new_df
+    else:
+        print("Creating new CSV file")
+        combined_df = new_df
+    
+    # Write the combined data
+    combined_df.to_csv(csv_file_path, index=False)
+    print(f"CSV updated at {csv_file_path} with {len(combined_df)} total rows")
+    
+    return csv_file_path
+
 def run_hydrosens_background(thread_id, region_name, coordinates, start_date, end_date, output_dir, amc, precipitation, crs, endmember):
     """
-    Wrapper function that runs hydrosens analysis in background
+    Wrapper function that runs hydrosens analysis in background with caching
     """
     global current_result
     
     try:
         print(f"Starting Hydrosens analysis (Thread: {thread_id}) for region: {region_name}")
         
-        # TODO: Implement caching
-        # Step 1: check if there is already a csv file at data/output/<region_name>/output.csv
-        # Step 2: If there is no file, create the file with proper headers
-        # Step 3: If there is a file, look into the file, extract the dates that are in the requested date range, but has no data
-        # Step 4: Run hydrosens on the dates that have no data
-        # Step 5: Update the csv file with the analyzed dates
-        # Step 6: Return result
-
-        # Run the actual analysis with endmember parameter
-        results = run_hydrosens_with_coordinates(
-            region_name=region_name,
-            coordinates=coordinates,
-            start_date=start_date,
-            end_date=end_date,
-            output_dir=output_dir,
-            amc=amc,
-            precipitation=precipitation,
-            crs=crs,
-            endmember=endmember
-        )
+        # Step 1: Get all dates in the requested range
+        requested_dates = get_dates_from_range(start_date, end_date)
+        print(f"Requested date range: {start_date} to {end_date} ({len(requested_dates)} dates)")
         
-        # Set successful result
-        current_result = {
-            'success': True,
-            'message': 'Hydrosens analysis completed successfully',
-            'parameters': {
-                'region_name': region_name,
-                'start_date': start_date,
-                'end_date': end_date,
-                'amc': amc,
-                'precipitation': precipitation,
-                'coordinates': coordinates,
-                'crs': crs,
-                'endmember': endmember,
-                'num_coordinates': len(coordinates)
-            },
-            'outputs': results
-        }
+        # Step 2 & 3: Check existing data and determine what needs processing
+        dates_to_process, existing_data = check_existing_data(output_dir, region_name, requested_dates)
+        
+        if len(dates_to_process) == 0:
+            print("All requested dates already have complete data, no processing needed")
+            current_result = {
+                'success': True,
+                'message': 'All data already available from cache',
+                'parameters': {
+                    'region_name': region_name,
+                    'start_date': start_date,
+                    'end_date': end_date,
+                    'amc': amc,
+                    'precipitation': precipitation,
+                    'coordinates': coordinates,
+                    'crs': crs,
+                    'endmember': endmember,
+                    'num_coordinates': len(coordinates),
+                    'dates_from_cache': len(existing_data),
+                    'dates_processed': 0
+                },
+                'outputs': existing_data
+            }
+        else:
+            # Step 4: Run hydrosens on the dates that have no data
+            print(f"Processing {len(dates_to_process)} dates that need analysis")
+            new_results = run_hydrosens_with_coordinates(
+                region_name=region_name,
+                coordinates=coordinates,
+                dates_to_process=dates_to_process,  # Pass specific dates instead of range
+                output_dir=output_dir,
+                amc=amc,
+                precipitation=precipitation,
+                crs=crs,
+                endmember=endmember
+            )
+            
+            # Step 5: Append the new results to the CSV file
+            csv_path = append_to_csv(output_dir, region_name, new_results)
+            
+            # Step 6: Return combined result
+            combined_results = {**existing_data, **new_results}
+            
+            current_result = {
+                'success': True,
+                'message': 'Hydrosens analysis completed successfully',
+                'parameters': {
+                    'region_name': region_name,
+                    'start_date': start_date,
+                    'end_date': end_date,
+                    'amc': amc,
+                    'precipitation': precipitation,
+                    'coordinates': coordinates,
+                    'crs': crs,
+                    'endmember': endmember,
+                    'num_coordinates': len(coordinates),
+                    'dates_from_cache': len(existing_data),
+                    'dates_processed': len(new_results)
+                },
+                'outputs': combined_results
+            }
         
         print(f"Thread {thread_id} completed successfully for region: {region_name}")
         result_ready_event.set()

@@ -13,15 +13,14 @@ import time
 # Start the timer
 start_time = time.time()
 
-def run_hydrosens(main_folder, region_name, start_date, end_date, output_master, amc, p, coordinates, crs='EPSG:4326', endmember=3):
+def run_hydrosens(main_folder, region_name, dates_to_process, output_master, amc, p, coordinates, crs='EPSG:4326', endmember=3):
     """
-    Run the Hydrosens workflow for a given date range and coordinate-based area of interest.
+    Run the Hydrosens workflow for specific dates and coordinate-based area of interest.
     
     Parameters:
         main_folder: Main working folder
         region_name: Name of the region for folder organization
-        start_date: Start date for analysis
-        end_date: End date for analysis  
+        dates_to_process: List of datetime objects for specific dates to process
         output_master: Output directory
         amc: Antecedent Moisture Condition
         p: Precipitation value
@@ -35,11 +34,12 @@ def run_hydrosens(main_folder, region_name, start_date, end_date, output_master,
     aoi = coordinates_to_ee_geometry(coordinates)
     
     print(f"Processing coordinate-based AOI with {len(coordinates)} vertices for region: {region_name}")
-    return process_dates(start_date, end_date, aoi, output_master, region_name, amc, p, coordinates, crs, endmember)
+    print(f"Processing {len(dates_to_process)} specific dates")
+    return process_specific_dates(dates_to_process, aoi, output_master, region_name, amc, p, coordinates, crs, endmember)
 
 
-def process_dates(start_date, end_date, aoi, output_master, region_name, amc, p, coordinates, crs, endmember=3):
-    """Process Sentinel-2 images within a date range if imagery exists."""
+def process_specific_dates(dates_to_process, aoi, output_master, region_name, amc, p, coordinates, crs, endmember=3):
+    """Process Sentinel-2 images for specific dates if imagery exists."""
 
     HSG250m = os.getenv("HSG250m")
     sli = os.getenv("SLI")
@@ -52,14 +52,10 @@ def process_dates(start_date, end_date, aoi, output_master, region_name, amc, p,
     avg_temp = []
     avg_p = []
 
-    if isinstance(start_date, str):
-        start_date = datetime.strptime(start_date, '%Y-%m-%d')
-    if isinstance(end_date, str):
-        end_date = datetime.strptime(end_date, '%Y-%m-%d')
-
-    date = start_date
-
-    while date <= end_date:
+    for date in dates_to_process:
+        if isinstance(date, str):
+            date = datetime.strptime(date, '%Y-%m-%d')
+            
         print(f"Processing for date: {date.strftime('%Y-%m-%d')} in region: {region_name}")
         # extract S-2 data
         StartDate = date
@@ -69,7 +65,6 @@ def process_dates(start_date, end_date, aoi, output_master, region_name, amc, p,
 
         if num_images == 0:
             print(f"No images found for {StartDate.strftime('%Y-%m-%d')}. Skipping to next date.")
-            date += timedelta(days=1)
             continue
 
         dates_with_images.append(date)
@@ -515,47 +510,24 @@ def process_dates(start_date, end_date, aoi, output_master, region_name, amc, p,
         runoff_c[runoff_c < 0] = np.nan
 
         CreateFloat(runoff_c, CCN, "Runoff", output)
-        date += timedelta(days=1)
 
-    data = {
-        'date': [d.strftime('%Y-%m-%d') for d in dates_with_images],
-        'veg_mean': vegetation_values,
-        'soil_mean': soil_values,
-        'curve_number': curve_number,
-        'ndvi': ndvi_values,
-        'temperature': avg_temp,
-        'precipitation': avg_p
-    }
-    
+    # Create results dictionary for only the dates that were successfully processed
     formatted_data = {}
-
-    for i in range(len(data['date'])):
-        date = data['date'][i]
+    
+    for i in range(len(dates_with_images)):
+        date = dates_with_images[i].strftime('%Y-%m-%d')
         formatted_data[date] = {
-            "ndvi": nan_to_zero(data['ndvi'][i]),
-            "soil-fraction": nan_to_zero(data['soil_mean'][i]),
-            "vegetation-fraction": nan_to_zero(data['veg_mean'][i]),
-            "precipitation": nan_to_zero(data['precipitation']),
-            "temperature": nan_to_zero(data['temperature']),
-            "curve-number": nan_to_zero(data['curve_number'][i])
+            "ndvi": nan_to_zero(ndvi_values[i]),
+            "soil-fraction": nan_to_zero(soil_values[i]),
+            "vegetation-fraction": nan_to_zero(vegetation_values[i]),
+            "precipitation": nan_to_zero(avg_p),
+            "temperature": nan_to_zero(avg_temp),
+            "curve-number": nan_to_zero(curve_number[i])
         }
 
-    df = pd.DataFrame(data)
-    df = df[
-    df[['veg_mean', 'soil_mean', 'curve_number',
-        'ndvi', 'temperature', 'precipitation']].notna().all(axis=1)
-    ]
-
-    # Create region-specific output directory and CSV file
-    region_output_dir = os.path.join(output_master, region_name)
-    os.makedirs(region_output_dir, exist_ok=True)
-    output_csv = os.path.join(region_output_dir, "output.csv")
-
-    df.to_csv(output_csv, index=False)
-
-    print(f"Data saved to {output_csv}")
-
+    print(f"Successfully processed {len(dates_with_images)} out of {len(dates_to_process)} requested dates")
     return formatted_data
+
 
 def create_output_folder(base_output, region_name, date):
     """Create a subfolder for the specific region and date."""
@@ -569,8 +541,8 @@ def create_output_folder(base_output, region_name, date):
     return folder_path
 
 
-# Example usage function for the coordinate-based approach
-def run_hydrosens_with_coordinates(region_name, coordinates, start_date, end_date, output_dir, amc=2, precipitation=10.0, crs='EPSG:4326', endmember=3):
+# Updated convenience function for the coordinate-based approach
+def run_hydrosens_with_coordinates(region_name, coordinates, dates_to_process=None, start_date=None, end_date=None, output_dir=None, amc=2, precipitation=10.0, crs='EPSG:4326', endmember=3):
     """
     Convenience function to run Hydrosens analysis with coordinate array
     
@@ -578,8 +550,9 @@ def run_hydrosens_with_coordinates(region_name, coordinates, start_date, end_dat
         region_name: Name of the region for folder organization
         coordinates: List of [lon, lat] pairs defining the polygon boundary
                     Example: [[-120.5, 35.2], [-120.3, 35.2], [-120.3, 35.4], [-120.5, 35.4]]
-        start_date: Start date as string 'YYYY-MM-DD'
-        end_date: End date as string 'YYYY-MM-DD' 
+        dates_to_process: List of datetime objects for specific dates to process (preferred)
+        start_date: Start date as string 'YYYY-MM-DD' (fallback for backward compatibility)
+        end_date: End date as string 'YYYY-MM-DD' (fallback for backward compatibility)
         output_dir: Output directory path
         amc: Antecedent Moisture Condition (1, 2, or 3)
         precipitation: Precipitation value in mm
@@ -605,19 +578,45 @@ def run_hydrosens_with_coordinates(region_name, coordinates, start_date, end_dat
         if not (-90 <= coord[1] <= 90):
             raise ValueError(f"Latitude {coord[1]} at position {i} is out of valid range [-90, 90]")
     
+    # Handle dates - prioritize dates_to_process, fallback to start/end date range
+    if dates_to_process is not None:
+        if not dates_to_process:
+            raise ValueError("dates_to_process cannot be empty")
+        process_dates = dates_to_process
+        print(f"Processing {len(process_dates)} specific dates")
+    elif start_date and end_date:
+        # Convert date range to list of dates for backward compatibility
+        if isinstance(start_date, str):
+            start_dt = datetime.strptime(start_date, '%Y-%m-%d')
+        else:
+            start_dt = start_date
+        
+        if isinstance(end_date, str):
+            end_dt = datetime.strptime(end_date, '%Y-%m-%d')
+        else:
+            end_dt = end_date
+        
+        process_dates = []
+        current_date = start_dt
+        while current_date <= end_dt:
+            process_dates.append(current_date)
+            current_date += timedelta(days=1)
+        print(f"Converting date range {start_date} to {end_date} into {len(process_dates)} dates")
+    else:
+        raise ValueError("Either provide dates_to_process or both start_date and end_date")
+    
     # Validate endmember parameter - default to 3 if not 2
     if endmember != 2:
         endmember = 3
     
     print(f"Running Hydrosens analysis for region '{region_name}' with polygon of {len(coordinates)} vertices")
-    print(f"Date range: {start_date} to {end_date}")
+    print(f"Processing {len(process_dates)} dates")
     print(f"AMC: {amc}, Precipitation: {precipitation}mm")
     
     return run_hydrosens(
         main_folder=".",  # Current directory as main folder
         region_name=region_name,
-        start_date=start_date,
-        end_date=end_date, 
+        dates_to_process=process_dates,
         output_master=output_dir,
         amc=amc,
         p=precipitation,
