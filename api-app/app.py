@@ -75,58 +75,10 @@ def analyze():
         # This will now block until the latest request completes
         response = requests.post(hydrosens_url, json=data_payload, timeout=None)  # No timeout - wait for completion
         print(f"[analyze] HydroSENS responded with status {response.status_code}")
-        
-        if response.status_code == 200:
-            # Processing completed successfully
-            response_data = response.json()
-            
-            # Download the files now that processing is complete            
-            try:
-                # Download CSV file
-                csv_file = requests.get(hydrosens_url + "/csv-file")
-                if csv_file.status_code == 200:
-                    os.makedirs(output_master, exist_ok=True)
-                    save_region_csv(region_name, csv_file.content, output_master)
-                else:
-                    print(f"[analyze] CSV download failed with status {csv_file.status_code}")
-                                
-                # Return the CSV data if available, otherwise return the response data
-                if os.path.exists(region_csv_path):
-                    if not prev_outputs:
-                        return get_json_from_region_csv(region_csv_path, start_date, end_date, check_range=False)
-                    new_outputs = {}
-                    new_outputs["outputs"] = get_json_from_region_csv(region_csv_path, start_date, end_date, check_range=False)["outputs"]
-                    prev_outputs["outputs"].update(new_outputs["outputs"])
-                    return prev_outputs
-                else:
-                    return jsonify(response_data), 200
-                    
-            except Exception as e:
-                print(f"[analyze] Error downloading files: {str(e)}")
-                # Still return the response data even if file download fails
-                return jsonify(response_data), 200
-                
-        elif response.status_code == 409:
-            # Request was cancelled due to newer request
-            return jsonify({
-                "error": "Request was cancelled because a newer request was submitted"
-            }), 409
-            
-        else:
-            # Handle other error responses
-            try:
-                error_data = response.json()
-                return jsonify(error_data), response.status_code
-            except:
-                return jsonify({
-                    "error": f"HydroSENS request failed with status {response.status_code}"
-                }), response.status_code
 
-    except requests.exceptions.Timeout:
-        return jsonify({"error": "Request timeout"}), 504
-    except requests.exceptions.RequestException as e:
-        print(f"[analyze] Request exception: {str(e)}")
-        return jsonify({"error": f"Failed to connect to HydroSENS: {str(e)}"}), 503
+        response_data = response.json()
+        return jsonify(response_data), 200
+    
     except Exception as e:
         print(f"[analyze] Exception:", str(e))
         return jsonify({"error": str(e)}), 500
@@ -161,10 +113,10 @@ def get_tif_zip():
         response = requests.get(
             hydrosens_url,
             params={
+                "region_name": regionName,
                 "start_date": startDate,
                 "end_date": endDate
-            },
-            timeout=300  # 5 minute timeout for zip creation
+            }
         )
         
         if response.status_code == 200:
@@ -203,57 +155,6 @@ def get_csv_file():
     if not regionName or not startDate or not endDate:
         return jsonify({"error": "Missing required parameters: region_name, start_date, end_date"}), 400
     
-    output_master = os.getenv("OUTPUT_MASTER", "./data/output")
-    csv_file_path = os.path.join(output_master, f"{regionName}.csv")
-
-    if not os.path.exists(csv_file_path):
-        return jsonify({"error": "CSV output file not found."}), 404
-
-    try:
-        # Get filtered data using the existing helper function
-        filtered_data = get_json_from_region_csv(csv_file_path, startDate, endDate, check_range=False)
-        
-        # Convert the filtered JSON data back to CSV format
-        import pandas as pd
-        import io
-        
-        # Extract the outputs data
-        outputs = filtered_data.get("outputs", {})
-        
-        if not outputs:
-            return jsonify({"error": "No data found for the specified date range"}), 404
-        
-        # Convert to DataFrame for CSV export
-        rows = []
-        for date, values in outputs.items():
-            row = {"date": date}
-            row.update(values)
-            rows.append(row)
-        
-        df = pd.DataFrame(rows)
-        df = df.sort_values('date')  # Sort by date
-        
-        # Create CSV in memory
-        csv_buffer = io.StringIO()
-        df.to_csv(csv_buffer, index=False)
-        csv_content = csv_buffer.getvalue()
-        csv_buffer.close()
-        
-        # Create a BytesIO object for send_file
-        csv_bytes = io.BytesIO()
-        csv_bytes.write(csv_content.encode('utf-8'))
-        csv_bytes.seek(0)
-        
-        return send_file(
-            csv_bytes, 
-            mimetype='text/csv', 
-            as_attachment=True, 
-            download_name=f'{regionName}_{startDate}_to_{endDate}.csv'
-        )
-        
-    except Exception as e:
-        print(f"[get_csv_file] Error filtering CSV data: {str(e)}")
-        return jsonify({"error": f"Failed to filter CSV data: {str(e)}"}), 500
     
 @app.route('/generate-report', methods=['POST'])
 def generate_report():

@@ -51,17 +51,26 @@ def terminate_thread(thread):
     except Exception as e:
         print(f"Error terminating thread: {str(e)}")
 
-def run_hydrosens_background(thread_id, coordinates, start_date, end_date, output_dir, amc, precipitation, crs, endmember):
+def run_hydrosens_background(thread_id, region_name, coordinates, start_date, end_date, output_dir, amc, precipitation, crs, endmember):
     """
     Wrapper function that runs hydrosens analysis in background
     """
     global current_result
     
     try:
-        print(f"Starting Hydrosens analysis (Thread: {thread_id})")
+        print(f"Starting Hydrosens analysis (Thread: {thread_id}) for region: {region_name}")
         
+        # TODO: Implement caching
+        # Step 1: check if there is already a csv file at data/output/<region_name>/output.csv
+        # Step 2: If there is no file, create the file with proper headers
+        # Step 3: If there is a file, look into the file, extract the dates that are in the requested date range, but has no data
+        # Step 4: Run hydrosens on the dates that have no data
+        # Step 5: Update the csv file with the analyzed dates
+        # Step 6: Return result
+
         # Run the actual analysis with endmember parameter
         results = run_hydrosens_with_coordinates(
+            region_name=region_name,
             coordinates=coordinates,
             start_date=start_date,
             end_date=end_date,
@@ -77,6 +86,7 @@ def run_hydrosens_background(thread_id, coordinates, start_date, end_date, outpu
             'success': True,
             'message': 'Hydrosens analysis completed successfully',
             'parameters': {
+                'region_name': region_name,
                 'start_date': start_date,
                 'end_date': end_date,
                 'amc': amc,
@@ -89,7 +99,7 @@ def run_hydrosens_background(thread_id, coordinates, start_date, end_date, outpu
             'outputs': results
         }
         
-        print(f"Thread {thread_id} completed successfully")
+        print(f"Thread {thread_id} completed successfully for region: {region_name}")
         result_ready_event.set()
         
     except SystemExit:
@@ -118,6 +128,7 @@ def run_hydrosens_endpoint():
         data = request.get_json()
         
         # Extract parameters
+        region_name = data.get('region_name', 'Unknown Region')
         start_date = data.get('start_date')
         end_date = data.get('end_date')
         amc = data.get('amc')
@@ -160,16 +171,16 @@ def run_hydrosens_endpoint():
             current_result = None
             result_ready_event.clear()
             
-            # Create and start new thread with endmember parameter
+            # Create and start new thread with region_name and endmember parameter
             current_thread = threading.Thread(
                 target=run_hydrosens_background,
-                args=(new_thread_id, coordinates, start_date, end_date, output_master, amc, precipitation, crs, endmember)
+                args=(new_thread_id, region_name, coordinates, start_date, end_date, output_master, amc, precipitation, crs, endmember)
             )
             current_thread_id = new_thread_id
             current_thread.start()
         
         # Log the request parameters
-        print(f"Started Hydrosens analysis (Thread: {new_thread_id}):")
+        print(f"Started Hydrosens analysis (Thread: {new_thread_id}) for region: {region_name}:")
         app.logger.info(f"  Date range: {start_date} to {end_date}")
         app.logger.info(f"  AMC: {amc}, Precipitation: {precipitation}mm")
         app.logger.info(f"  Endmembers: {endmember} ({'vegetation, soil' if endmember == 2 else 'vegetation, impervious, soil'})")
@@ -205,8 +216,12 @@ def run_hydrosens_endpoint():
 @app.route('/hydrosens/csv-file', methods=['GET'])
 def get_csv_file():
     """Endpoint to retrieve the CSV output file."""
+    # Get region_name from query parameters
+    region_name = request.args.get('region_name', 'Unknown Region')
+    
     output_master = os.getenv('OUTPUT_MASTER', '/app/data/output')
-    csv_file_path = os.path.join(output_master, 'output.csv')
+    # Update path to include region folder
+    csv_file_path = os.path.join(output_master, region_name, 'output.csv')
 
     if not os.path.exists(csv_file_path):
         return jsonify({"error": "CSV output file not found."}), 404
@@ -221,18 +236,21 @@ def export_tifs_zip():
     from io import BytesIO
     from datetime import datetime
 
-    # Get date range parameters
+    # Get date range parameters and region name
     start_date = request.args.get('start_date')
     end_date = request.args.get('end_date')
+    region_name = request.args.get('region_name', 'Unknown Region')
     
     if not start_date or not end_date:
         return jsonify({"error": "Missing required parameters: start_date, end_date"}), 400
 
     output_master = os.getenv('OUTPUT_MASTER', '/app/data/output')
+    # Update path to include region folder
+    region_output_dir = os.path.join(output_master, region_name)
     zip_buffer = BytesIO()
 
-    if not os.path.exists(output_master):
-        return jsonify({"error": "Output folder does not exist"}), 404
+    if not os.path.exists(region_output_dir):
+        return jsonify({"error": f"Output folder for region '{region_name}' does not exist"}), 404
 
     try:
         # Parse date range for filtering
@@ -242,8 +260,8 @@ def export_tifs_zip():
         tif_files_found = False
         
         with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zipf:
-            for date_folder in os.listdir(output_master):
-                date_path = os.path.join(output_master, date_folder)
+            for date_folder in os.listdir(region_output_dir):
+                date_path = os.path.join(region_output_dir, date_folder)
                 
                 # Skip if not a directory
                 if not os.path.isdir(date_path):
@@ -275,7 +293,7 @@ def export_tifs_zip():
 
         if not tif_files_found:
             return jsonify({
-                "error": f"No TIF files found for date range {start_date} to {end_date}"
+                "error": f"No TIF files found for region '{region_name}' in date range {start_date} to {end_date}"
             }), 404
 
         zip_buffer.seek(0)
@@ -283,7 +301,7 @@ def export_tifs_zip():
             zip_buffer,
             mimetype='application/zip',
             as_attachment=True,
-            download_name=f'tif_outputs_{start_date}_to_{end_date}.zip'
+            download_name=f'tif_outputs_{region_name}_{start_date}_to_{end_date}.zip'
         )
 
     except ValueError as e:

@@ -13,12 +13,13 @@ import time
 # Start the timer
 start_time = time.time()
 
-def run_hydrosens(main_folder, start_date, end_date, output_master, amc, p, coordinates, crs='EPSG:4326', endmember=3):
+def run_hydrosens(main_folder, region_name, start_date, end_date, output_master, amc, p, coordinates, crs='EPSG:4326', endmember=3):
     """
     Run the Hydrosens workflow for a given date range and coordinate-based area of interest.
     
     Parameters:
         main_folder: Main working folder
+        region_name: Name of the region for folder organization
         start_date: Start date for analysis
         end_date: End date for analysis  
         output_master: Output directory
@@ -33,11 +34,11 @@ def run_hydrosens(main_folder, start_date, end_date, output_master, amc, p, coor
     # Convert coordinates to Earth Engine geometry
     aoi = coordinates_to_ee_geometry(coordinates)
     
-    print(f"Processing coordinate-based AOI with {len(coordinates)} vertices")
-    return process_dates(start_date, end_date, aoi, output_master, amc, p, coordinates, crs, endmember)
+    print(f"Processing coordinate-based AOI with {len(coordinates)} vertices for region: {region_name}")
+    return process_dates(start_date, end_date, aoi, output_master, region_name, amc, p, coordinates, crs, endmember)
 
 
-def process_dates(start_date, end_date, aoi, output_master, amc, p, coordinates, crs, endmember=3):
+def process_dates(start_date, end_date, aoi, output_master, region_name, amc, p, coordinates, crs, endmember=3):
     """Process Sentinel-2 images within a date range if imagery exists."""
 
     HSG250m = os.getenv("HSG250m")
@@ -59,7 +60,7 @@ def process_dates(start_date, end_date, aoi, output_master, amc, p, coordinates,
     date = start_date
 
     while date <= end_date:
-        print(f"Processing for date: {date.strftime('%Y-%m-%d')}")
+        print(f"Processing for date: {date.strftime('%Y-%m-%d')} in region: {region_name}")
         # extract S-2 data
         StartDate = date
         EndDate = StartDate + timedelta(days=1, seconds=-1)
@@ -73,7 +74,7 @@ def process_dates(start_date, end_date, aoi, output_master, amc, p, coordinates,
 
         dates_with_images.append(date)
         
-        output = create_output_folder(output_master, date)
+        output = create_output_folder(output_master, region_name, date)
         print("Output: ", output)
 
         print(f"Image found for {date}, creating output folder.")
@@ -545,9 +546,10 @@ def process_dates(start_date, end_date, aoi, output_master, amc, p, coordinates,
         'ndvi', 'temperature', 'precipitation']].notna().all(axis=1)
     ]
 
-    # Create a filename based on coordinates (using first coordinate as identifier)
-    coord_id = f"coords_{coordinates[0][0]:.3f}_{coordinates[0][1]:.3f}"
-    output_csv = os.path.join(output_master, "output" + '.csv')
+    # Create region-specific output directory and CSV file
+    region_output_dir = os.path.join(output_master, region_name)
+    os.makedirs(region_output_dir, exist_ok=True)
+    output_csv = os.path.join(region_output_dir, "output.csv")
 
     df.to_csv(output_csv, index=False)
 
@@ -555,12 +557,12 @@ def process_dates(start_date, end_date, aoi, output_master, amc, p, coordinates,
 
     return formatted_data
 
-def create_output_folder(base_output, date):
-    """Create a subfolder for the specific date."""
+def create_output_folder(base_output, region_name, date):
+    """Create a subfolder for the specific region and date."""
     # Convert date to string format YYYY-MM-DD
     date_str = date.strftime('%Y-%m-%d')
-    # Create folder path
-    folder_path = os.path.join(base_output, date_str)
+    # Create folder path: base_output/region_name/date
+    folder_path = os.path.join(base_output, region_name, date_str)
     # Check if folder exists, if not, create it
     if not os.path.exists(folder_path):
         os.makedirs(folder_path)
@@ -568,11 +570,12 @@ def create_output_folder(base_output, date):
 
 
 # Example usage function for the coordinate-based approach
-def run_hydrosens_with_coordinates(coordinates, start_date, end_date, output_dir, amc=2, precipitation=10.0, crs='EPSG:4326', endmember=3):
+def run_hydrosens_with_coordinates(region_name, coordinates, start_date, end_date, output_dir, amc=2, precipitation=10.0, crs='EPSG:4326', endmember=3):
     """
     Convenience function to run Hydrosens analysis with coordinate array
     
     Parameters:
+        region_name: Name of the region for folder organization
         coordinates: List of [lon, lat] pairs defining the polygon boundary
                     Example: [[-120.5, 35.2], [-120.3, 35.2], [-120.3, 35.4], [-120.5, 35.4]]
         start_date: Start date as string 'YYYY-MM-DD'
@@ -606,12 +609,13 @@ def run_hydrosens_with_coordinates(coordinates, start_date, end_date, output_dir
     if endmember != 2:
         endmember = 3
     
-    print(f"Running Hydrosens analysis for polygon with {len(coordinates)} vertices")
+    print(f"Running Hydrosens analysis for region '{region_name}' with polygon of {len(coordinates)} vertices")
     print(f"Date range: {start_date} to {end_date}")
     print(f"AMC: {amc}, Precipitation: {precipitation}mm")
     
     return run_hydrosens(
         main_folder=".",  # Current directory as main folder
+        region_name=region_name,
         start_date=start_date,
         end_date=end_date, 
         output_master=output_dir,
