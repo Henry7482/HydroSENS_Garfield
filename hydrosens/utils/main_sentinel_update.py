@@ -525,8 +525,8 @@ def process_specific_dates(dates_to_process, aoi, output_master, region_name, am
             "ndvi": nan_to_zero(ndvi_values[i]),
             "soil-fraction": nan_to_zero(soil_values[i]),
             "vegetation-fraction": nan_to_zero(vegetation_values[i]),
-            "precipitation": float(np.mean(avg_p)),
-            "temperature": float(np.mean(avg_temp)),
+            "precipitation": nan_to_zero(avg_p[i]),
+            "temperature": nan_to_zero(avg_temp[i]),
             "curve-number": nan_to_zero(curve_number[i])
         }
 
