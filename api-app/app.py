@@ -346,6 +346,25 @@ def check_cache():
 def delete_all_cache():
     """Delete all cache files for all regions."""
     try:
+        # Delete PDF cache files first
+        output_master = os.getenv("OUTPUT_MASTER", "./data/generated_reports")
+        deleted_pdf_regions = []
+        failed_pdf_regions = []
+        
+        if os.path.exists(output_master):
+            for region_folder in os.listdir(output_master):
+                region_path = os.path.join(output_master, region_folder)
+                
+                if os.path.isdir(region_path):
+                    try:
+                        import shutil
+                        shutil.rmtree(region_path)
+                        deleted_pdf_regions.append(region_folder)
+                        print(f"Deleted PDF cache for region: {region_folder}")
+                    except Exception as e:
+                        failed_pdf_regions.append({"region": region_folder, "error": str(e)})
+                        print(f"Failed to delete PDF cache for region {region_folder}: {str(e)}")
+        
         # Forward request to HydroSENS API
         hydrosens_url = os.getenv("HYDROSENS_URL")
         if not hydrosens_url:
@@ -360,7 +379,23 @@ def delete_all_cache():
         response = requests.delete(hydrosens_url)
         
         if response.status_code == 200:
-            return jsonify(response.json()), 200
+            hydrosens_response = response.json()
+            
+            # Combine results from both PDF cache and Hydrosens cache deletion
+            combined_response = {
+                "message": "Cache deletion completed",
+                "pdf_cache": {
+                    "deleted_regions": deleted_pdf_regions,
+                    "total_deleted": len(deleted_pdf_regions)
+                },
+                "hydrosens_cache": hydrosens_response
+            }
+            
+            if failed_pdf_regions:
+                combined_response["pdf_cache"]["failed_regions"] = failed_pdf_regions
+                combined_response["pdf_cache"]["total_failed"] = len(failed_pdf_regions)
+            
+            return jsonify(combined_response), 200
         else:
             try:
                 error_data = response.json()
@@ -381,6 +416,24 @@ def delete_region_cache(region_name):
         if not region_name or not isinstance(region_name, str):
             return jsonify({"error": "Invalid region name"}), 400
         
+        # Delete PDF cache files for this region first
+        output_master = os.getenv("OUTPUT_MASTER", "./data/generated_reports")
+        region_folder = region_name.replace(" ", "_").replace("/", "_").replace("\\", "_")
+        region_path = os.path.join(output_master, region_folder)
+        
+        pdf_cache_deleted = False
+        pdf_cache_error = None
+        
+        if os.path.exists(region_path):
+            try:
+                import shutil
+                shutil.rmtree(region_path)
+                pdf_cache_deleted = True
+                print(f"Deleted PDF cache for region: {region_name}")
+            except Exception as e:
+                pdf_cache_error = str(e)
+                print(f"Failed to delete PDF cache for region {region_name}: {str(e)}")
+        
         # Forward request to HydroSENS API
         hydrosens_url = os.getenv("HYDROSENS_URL")
         if not hydrosens_url:
@@ -395,7 +448,22 @@ def delete_region_cache(region_name):
         response = requests.delete(hydrosens_url)
         
         if response.status_code == 200:
-            return jsonify(response.json()), 200
+            hydrosens_response = response.json()
+            
+            # Combine results from both PDF cache and Hydrosens cache deletion
+            combined_response = {
+                "message": f"Cache for region '{region_name}' deleted successfully",
+                "deleted_region": region_name,
+                "pdf_cache": {
+                    "deleted": pdf_cache_deleted
+                },
+                "hydrosens_cache": hydrosens_response
+            }
+            
+            if pdf_cache_error:
+                combined_response["pdf_cache"]["error"] = pdf_cache_error
+            
+            return jsonify(combined_response), 200
         else:
             try:
                 error_data = response.json()
