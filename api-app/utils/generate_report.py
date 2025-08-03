@@ -69,7 +69,9 @@ def run_generate_report(metrics_data, report_name):
             edge_color='cyan',
             face_color='blue',
             alpha=0.05,
-            use_gee_first=True
+            use_gee_first=True,
+            add_watermark=True,
+            watermark_position="bottom-left"
         )
                         
         if success:
