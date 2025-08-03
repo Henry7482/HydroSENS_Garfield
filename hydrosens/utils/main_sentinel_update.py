@@ -516,6 +516,9 @@ def process_specific_dates(dates_to_process, aoi, output_master, region_name, am
 
         CreateFloat(runoff_c, CCN, "Runoff", output)
 
+        # Clean up output folder - keep only essential files
+        cleanup_output_folder(output)
+
     # Create results dictionary for only the dates that were successfully processed
     formatted_data = {}
     
@@ -544,6 +547,50 @@ def create_output_folder(base_output, region_name, date):
     if not os.path.exists(folder_path):
         os.makedirs(folder_path)
     return folder_path
+
+
+def cleanup_output_folder(output_folder):
+    """
+    Clean up output folder to keep only essential files based on LAYER_RANGES.
+    
+    Essential files to keep:
+    - vegetation.tif
+    - impervious.tif
+    - CCN_final.tif
+    - Runoff.tif
+    - NDVI.tif
+    - Vegetation_Health.tif
+    - soil.tif
+    """
+    import os
+    import glob
+    
+    # Define essential files to keep (based on LAYER_RANGES keys)
+    essential_files = {
+        'vegetation.tif',
+        'impervious.tif', 
+        'CCN_final.tif',
+        'Runoff.tif',
+        'NDVI.tif',
+        'Vegetation_Health.tif',
+        'soil.tif'
+    }
+    
+    # Get all files in the output folder
+    all_files = glob.glob(os.path.join(output_folder, '*'))
+    
+    # Remove non-essential files
+    for file_path in all_files:
+        if os.path.isfile(file_path):
+            filename = os.path.basename(file_path)
+            if filename not in essential_files:
+                try:
+                    os.remove(file_path)
+                    print(f"Removed unnecessary file: {filename}")
+                except Exception as e:
+                    print(f"Warning: Could not remove {filename}: {e}")
+    
+    print(f"Output folder cleanup completed. Kept {len(essential_files)} essential files.")
 
 
 # Updated convenience function for the coordinate-based approach
