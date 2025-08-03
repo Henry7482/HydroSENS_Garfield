@@ -15,7 +15,17 @@ def run_generate_report(metrics_data, report_name):
     print("Report name: ", report_name)
     TEMPLATE_DIR = "/app/data/templates"  # Directory where the LaTeX template is stored
     TEMPLATE_FILENAME = "report_template.tex.j2" # Assumes file-based template
-    OUTPUT_DIR = "./data/generated_reports"
+    
+    # Determine output directory and filename from report_name
+    if os.path.isabs(report_name) or '/' in report_name or '\\' in report_name:
+        # report_name is a full path, extract directory and filename
+        output_dir = os.path.dirname(report_name)
+        jobname = os.path.splitext(os.path.basename(report_name))[0]
+    else:
+        # report_name is just a name, use default directory
+        output_dir = "./data/generated_reports"
+        jobname = report_name
+    
     KEEP_TEX = True # Set to False to delete the .tex file after compilation
 
     # --- 1. Get data for the Report ---
@@ -109,8 +119,8 @@ def run_generate_report(metrics_data, report_name):
     print("\nStep 5: Compiling LaTeX to PDF...")
     pdf_file_path = compile_latex_to_pdf(
         latex_content=rendered_latex,
-        jobname=report_name,
-        output_dir=OUTPUT_DIR,
+        jobname=jobname,
+        output_dir=output_dir,
         use_latexmk=True, # Recommended
         latex_engine="xelatex", # latexmk will use this engine
         assets_paths=None,

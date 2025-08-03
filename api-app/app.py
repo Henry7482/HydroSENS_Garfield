@@ -1,6 +1,6 @@
 from flask import Flask, request, jsonify, send_file
 from utils.generate_report import run_generate_report
-from utils.helpers import generate_unique_key, generate_unique_file_path, get_json_from_region_csv, save_region_csv
+from utils.helpers import generate_unique_key, generate_unique_file_path, generate_region_cache_path, generate_region_cache_key, get_json_from_region_csv, save_region_csv
 import requests
 import os
 from flask_cors import CORS  
@@ -202,8 +202,8 @@ def generate_report():
     if not region_name or not start_date or not end_date or not coordinates:
         return jsonify({"error": "Missing required parameters: region_name, start_date, end_date, coordinates"}), 400
     
-    # Find cached report data
-    pdf_file_path = generate_unique_file_path(region_name, start_date, end_date, extension=".pdf")
+    # Find cached report data using region-based organization
+    pdf_file_path = generate_region_cache_path(region_name, start_date, end_date, extension=".pdf")
     print('Checking for cached report at:', pdf_file_path)
     if os.path.exists(pdf_file_path):
         return send_file(
@@ -213,7 +213,10 @@ def generate_report():
             download_name='report.pdf'
         )
 
-    report_filename = generate_unique_key(region_name, start_date, end_date)
+    # Generate the full file path for the report
+    report_file_path = generate_region_cache_path(region_name, start_date, end_date, extension=".pdf")
+    # Extract just the filename without extension for the jobname
+    report_filename = os.path.splitext(os.path.basename(report_file_path))[0]
 
     # Fetch json_data from hydrosens API
     try:
@@ -282,7 +285,7 @@ def generate_report():
 
     try:
         # Run report generation and get the output PDF path
-        pdf_file_path = run_generate_report(json_data, report_filename)
+        pdf_file_path = run_generate_report(json_data, report_file_path)
         
         # Send the file to the user
         return send_file(

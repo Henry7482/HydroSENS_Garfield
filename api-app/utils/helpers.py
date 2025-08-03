@@ -40,6 +40,51 @@ def generate_unique_file_path(region_name: str, start_date: str, end_date: str, 
     filePath = os.path.join(outputMaster, fileName)
     return filePath
 
+
+def generate_region_cache_path(region_name: str, start_date: str, end_date: str, extension: str = ".pdf") -> str:
+    """
+    Generate a cache file path organized by region folders with simple date-based naming.
+    
+    Args:
+        region_name (str): Name of the region (e.g., "Iowa-Central").
+        start_date (str): Start date in format YYYY-MM-DD.
+        end_date (str): End date in format YYYY-MM-DD.
+        extension (str): File extension, default is ".pdf".
+        
+    Returns:
+        str: Full file path organized by region with date-based filename.
+    """
+    # Create region folder name (sanitize for filesystem)
+    region_folder = region_name.replace(" ", "_").replace("/", "_").replace("\\", "_")
+    
+    # Create simple filename: start_date-end_date.pdf
+    filename = f"{start_date}-{end_date}{extension}"
+    
+    # Create the full path
+    output_master = './data/generated_reports'
+    region_path = os.path.join(output_master, region_folder)
+    
+    # Ensure the region folder exists
+    os.makedirs(region_path, exist_ok=True)
+    
+    file_path = os.path.join(region_path, filename)
+    return file_path
+
+
+def generate_region_cache_key(region_name: str, start_date: str, end_date: str) -> str:
+    """
+    Generate a simple cache key for region-based caching.
+    
+    Args:
+        region_name (str): Name of the region (e.g., "Iowa-Central").
+        start_date (str): Start date in format YYYY-MM-DD.
+        end_date (str): End date in format YYYY-MM-DD.
+        
+    Returns:
+        str: A simple cache key string.
+    """
+    return f"{region_name}_{start_date}_{end_date}"
+
 from datetime import datetime, timedelta
 
 def get_json_from_region_csv(csv_path: str, start_date: str, end_date: str, check_range: bool) -> dict | None:
