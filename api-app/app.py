@@ -347,7 +347,7 @@ def delete_all_cache():
     """Delete all cache files for all regions."""
     try:
         # Delete PDF cache files first
-        output_master = os.getenv("OUTPUT_MASTER", "./data/generated_reports")
+        output_master = "./data/generated_reports"
         deleted_pdf_regions = []
         failed_pdf_regions = []
         
@@ -417,7 +417,7 @@ def delete_region_cache(region_name):
             return jsonify({"error": "Invalid region name"}), 400
         
         # Delete PDF cache files for this region first
-        output_master = os.getenv("OUTPUT_MASTER", "./data/generated_reports")
+        output_master = "./data/generated_reports"
         region_folder = region_name.replace(" ", "_").replace("/", "_").replace("\\", "_")
         region_path = os.path.join(output_master, region_folder)
         
