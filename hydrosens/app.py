@@ -394,6 +394,111 @@ def export_tifs_zip():
     except Exception as e:
         app.logger.error(f"Error creating TIF zip: {str(e)}")
         return jsonify({"error": f"Failed to create TIF zip: {str(e)}"}), 500
+
+@app.route('/hydrosens/cache', methods=['POST'])
+def check_cache():
+    """Check if cache exists for the specified regions."""
+    try:
+        data = request.get_json()
+        
+        if not data or 'regionNames' not in data:
+            return jsonify({"error": "Missing required parameter: regionNames"}), 400
+        
+        region_names = data.get('regionNames', [])
+        
+        if not isinstance(region_names, list):
+            return jsonify({"error": "regionNames must be an array"}), 400
+        
+        if not region_names:
+            return jsonify({"error": "regionNames array cannot be empty"}), 400
+        
+        output_master = os.getenv('OUTPUT_MASTER', '/app/data/output')
+        has_cache = {}
+        
+        for region_name in region_names:
+            if not isinstance(region_name, str):
+                return jsonify({"error": f"Invalid region name: {region_name}. Must be a string."}), 400
+            
+            region_output_dir = os.path.join(output_master, region_name)
+            has_cache[region_name] = os.path.exists(region_output_dir)
+        
+        return jsonify({"hasCache": has_cache}), 200
+        
+    except Exception as e:
+        app.logger.error(f"Error checking cache: {str(e)}")
+        return jsonify({"error": f"Failed to check cache: {str(e)}"}), 500
+
+@app.route('/hydrosens/cache', methods=['DELETE'])
+def delete_all_cache():
+    """Delete all cache files for all regions."""
+    try:
+        output_master = os.getenv('OUTPUT_MASTER', '/app/data/output')
+        
+        if not os.path.exists(output_master):
+            return jsonify({"message": "No cache directory found"}), 200
+        
+        deleted_regions = []
+        failed_regions = []
+        
+        # Get all region directories
+        for region_name in os.listdir(output_master):
+            region_path = os.path.join(output_master, region_name)
+            
+            if os.path.isdir(region_path):
+                try:
+                    import shutil
+                    shutil.rmtree(region_path)
+                    deleted_regions.append(region_name)
+                    print(f"Deleted cache for region: {region_name}")
+                except Exception as e:
+                    failed_regions.append({"region": region_name, "error": str(e)})
+                    print(f"Failed to delete cache for region {region_name}: {str(e)}")
+        
+        response = {
+            "message": "Cache deletion completed",
+            "deleted_regions": deleted_regions,
+            "total_deleted": len(deleted_regions)
+        }
+        
+        if failed_regions:
+            response["failed_regions"] = failed_regions
+            response["total_failed"] = len(failed_regions)
+        
+        return jsonify(response), 200
+        
+    except Exception as e:
+        app.logger.error(f"Error deleting all cache: {str(e)}")
+        return jsonify({"error": f"Failed to delete all cache: {str(e)}"}), 500
+
+@app.route('/hydrosens/cache/<region_name>', methods=['DELETE'])
+def delete_region_cache(region_name):
+    """Delete cache files for a specific region."""
+    try:
+        if not region_name or not isinstance(region_name, str):
+            return jsonify({"error": "Invalid region name"}), 400
+        
+        output_master = os.getenv('OUTPUT_MASTER', '/app/data/output')
+        region_path = os.path.join(output_master, region_name)
+        
+        if not os.path.exists(region_path):
+            return jsonify({"error": f"Cache for region '{region_name}' not found"}), 404
+        
+        if not os.path.isdir(region_path):
+            return jsonify({"error": f"'{region_name}' is not a valid region directory"}), 400
+        
+        import shutil
+        shutil.rmtree(region_path)
+        
+        print(f"Deleted cache for region: {region_name}")
+        
+        return jsonify({
+            "message": f"Cache for region '{region_name}' deleted successfully",
+            "deleted_region": region_name
+        }), 200
+        
+    except Exception as e:
+        app.logger.error(f"Error deleting cache for region '{region_name}': {str(e)}")
+        return jsonify({"error": f"Failed to delete cache for region '{region_name}': {str(e)}"}), 500
     
 if __name__ == "__main__":
     import logging

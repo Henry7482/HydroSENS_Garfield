@@ -298,7 +298,116 @@ def generate_report():
         app.logger.error(f"Report generation failed: {str(e)}")
         return jsonify({"error": f"Report generation failed: {str(e)}"}), 500
 
+@app.route('/cache', methods=['POST'])
+def check_cache():
+    """Check if cache exists for the specified regions."""
+    data = request.get_json()
+    if not data:
+        return jsonify({"error": "Invalid JSON payload"}), 400
+    
+    region_names = data.get("regionNames", [])
+    
+    if not isinstance(region_names, list):
+        return jsonify({"error": "regionNames must be an array"}), 400
+    
+    if not region_names:
+        return jsonify({"error": "regionNames array cannot be empty"}), 400
+    
+    try:
+        # Forward request to HydroSENS API
+        hydrosens_url = os.getenv("HYDROSENS_URL")
+        if not hydrosens_url:
+            print("[check_cache] HYDROSENS_URL not set")
+            return jsonify({"error": "HYDROSENS_URL environment variable is not set"}), 500
+        
+        hydrosens_url = hydrosens_url.rstrip("/") + "/hydrosens/cache"
+        
+        print(f"[check_cache] Forwarding cache check request to HydroSENS at {hydrosens_url}")
+        
+        # Forward the request with the same payload
+        response = requests.post(hydrosens_url, json=data)
+        
+        if response.status_code == 200:
+            return jsonify(response.json()), 200
+        else:
+            try:
+                error_data = response.json()
+                return jsonify(error_data), response.status_code
+            except:
+                return jsonify({
+                    "error": f"HydroSENS cache check failed with status {response.status_code}"
+                }), response.status_code
+                
+    except Exception as e:
+        print(f"[check_cache] Exception: {str(e)}")
+        return jsonify({"error": str(e)}), 500
 
+@app.route('/cache', methods=['DELETE'])
+def delete_all_cache():
+    """Delete all cache files for all regions."""
+    try:
+        # Forward request to HydroSENS API
+        hydrosens_url = os.getenv("HYDROSENS_URL")
+        if not hydrosens_url:
+            print("[delete_all_cache] HYDROSENS_URL not set")
+            return jsonify({"error": "HYDROSENS_URL environment variable is not set"}), 500
+        
+        hydrosens_url = hydrosens_url.rstrip("/") + "/hydrosens/cache"
+        
+        print(f"[delete_all_cache] Forwarding delete all cache request to HydroSENS at {hydrosens_url}")
+        
+        # Forward the DELETE request
+        response = requests.delete(hydrosens_url)
+        
+        if response.status_code == 200:
+            return jsonify(response.json()), 200
+        else:
+            try:
+                error_data = response.json()
+                return jsonify(error_data), response.status_code
+            except:
+                return jsonify({
+                    "error": f"HydroSENS delete all cache failed with status {response.status_code}"
+                }), response.status_code
+                
+    except Exception as e:
+        print(f"[delete_all_cache] Exception: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/cache/<region_name>', methods=['DELETE'])
+def delete_region_cache(region_name):
+    """Delete cache files for a specific region."""
+    try:
+        if not region_name or not isinstance(region_name, str):
+            return jsonify({"error": "Invalid region name"}), 400
+        
+        # Forward request to HydroSENS API
+        hydrosens_url = os.getenv("HYDROSENS_URL")
+        if not hydrosens_url:
+            print("[delete_region_cache] HYDROSENS_URL not set")
+            return jsonify({"error": "HYDROSENS_URL environment variable is not set"}), 500
+        
+        hydrosens_url = hydrosens_url.rstrip("/") + f"/hydrosens/cache/{region_name}"
+        
+        print(f"[delete_region_cache] Forwarding delete region cache request to HydroSENS at {hydrosens_url}")
+        
+        # Forward the DELETE request
+        response = requests.delete(hydrosens_url)
+        
+        if response.status_code == 200:
+            return jsonify(response.json()), 200
+        else:
+            try:
+                error_data = response.json()
+                return jsonify(error_data), response.status_code
+            except:
+                return jsonify({
+                    "error": f"HydroSENS delete region cache failed with status {response.status_code}"
+                }), response.status_code
+                
+    except Exception as e:
+        print(f"[delete_region_cache] Exception: {str(e)}")
+        return jsonify({"error": str(e)}), 500
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000)
