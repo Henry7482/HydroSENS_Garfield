@@ -22,6 +22,20 @@ from datetime import datetime
 import cdsapi
 from shapely.geometry import Polygon
 import math
+import os
+
+def writeTCI(red_array, green_array, blue_array, reference, array_name, output):
+    output_filename = os.path.join(output, array_name + ".tif")
+    driver = gdal.GetDriverByName("GTiff")
+    output_raster = driver.Create(output_filename, reference.RasterXSize, reference.RasterYSize, 3, gdal.GDT_Float64)
+
+    output_raster.SetProjection(reference.GetProjection())
+    output_raster.SetGeoTransform(reference.GetGeoTransform())
+
+    output_raster.GetRasterBand(1).WriteArray(red_array)
+    output_raster.GetRasterBand(2).WriteArray(green_array)
+    output_raster.GetRasterBand(3).WriteArray(blue_array)
+    output_raster.FlushCache()
 
 def coordinates_to_polygon(coordinates):
     """

@@ -99,10 +99,15 @@ def process_specific_dates(dates_to_process, aoi, output_master, region_name, am
 
         bands = gdal.Open(output + r"/Bands.tif")
         band_array = bands.ReadAsArray()
+        arr2 = bands.GetRasterBand(1).ReadAsArray().astype('float64') 
         arr3 = bands.GetRasterBand(2).ReadAsArray().astype('float64')
         arr4 = bands.GetRasterBand(3).ReadAsArray().astype('float64')
         arr8A = bands.GetRasterBand(6).ReadAsArray().astype('float64')
         arr11 = bands.GetRasterBand(7).ReadAsArray().astype('float64')
+
+        # True Color Image 
+        np.seterr(invalid='ignore') 
+        writeTCI(arr4, arr3, arr2, bands, "TCI", output) 
 
         # NDVI
         np.seterr(invalid='ignore')
@@ -573,7 +578,8 @@ def cleanup_output_folder(output_folder):
         'Runoff.tif',
         'NDVI.tif',
         'Vegetation_Health.tif',
-        'soil.tif'
+        'soil.tif',
+        'TCI.tif'
     }
     
     # Get all files in the output folder
