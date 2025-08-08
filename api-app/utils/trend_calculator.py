@@ -46,8 +46,8 @@ def calculate_trends(metrics_data):
         slope, intercept = np.polyfit(x_numeric, y_values, 1)
         
         # Calculate percentage change from regression line's start to end value
-        start_value = intercept  # Value at first time point (x=0)
-        end_value = slope * x_numeric[-1] + intercept  # Value at last time point
+        start_value = round(intercept, 2)  # Value at first time point (x=0)
+        end_value = round(slope * x_numeric[-1] + intercept, 2)  # Value at last time point
         
         # For fraction/proportion metrics (0-1 range), use percentage point change
         # For other metrics, use traditional percentage change
