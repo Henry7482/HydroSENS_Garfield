@@ -1,0 +1,719 @@
+\documentclass[12pt,a4paper]{article}
+\usepackage[utf8]{inputenc}
+\usepackage{geometry}
+\usepackage{graphicx}
+\usepackage{xcolor}
+\usepackage{titlesec}
+\usepackage{fancyhdr}
+\usepackage{enumitem}
+\usepackage{pgfplots}
+\usepackage{fontspec}
+\usepackage{setspace}
+\usepackage{tabularx}
+\usepackage{tikz}
+\usepackage[absolute,overlay]{textpos}
+\pgfplotsset{compat=1.18}
+
+% Define custom colors
+\definecolor{hydrosensblue}{RGB}{37, 51, 114}
+\definecolor{hydrosenscyan}{RGB}{81, 186, 215}
+
+% Page margins
+\geometry{
+    top=2cm,
+    bottom=2cm,
+    left=2cm,
+    right=2cm
+}
+
+% Load custom fonts
+\newfontfamily\titlefont[
+  Path = assets/fonts/,
+  UprightFont = JosefinSlab-Regular,
+  BoldFont = JosefinSlab-Bold
+]{Josefin Slab}
+
+\newfontfamily\subtitlefont[
+  Path = assets/fonts/,
+  UprightFont = LibreBaskerville-Regular,
+  BoldFont = LibreBaskerville-Bold
+]{Libre Baskerville}
+
+\newfontfamily\contentfont[
+  Path = assets/fonts/,
+  UprightFont = LibreBaskerville-Regular
+]{Libre Baskerville}
+
+% Custom styling commands
+\newcommand{\HydroTitle}[1]{%
+    {\titlefont\color{hydrosensblue}\bfseries\fontsize{60pt}{40pt}\selectfont #1}
+}
+
+\newcommand{\HydroSubtitle}[1]{%
+    {\subtitlefont\color{hydrosensblue}\bfseries\fontsize{16pt}{20pt}\selectfont #1}
+}
+
+\newcommand{\HydroContent}[1]{%
+{\contentfont\color{black}\normalfont\fontsize{16pt}{20pt}\selectfont #1}
+}
+
+% Fancy header/footer
+\pagestyle{fancy}
+\fancyhead{}
+\fancyfoot{}
+\renewcommand{\headrulewidth}{0pt}
+\renewcommand{\footrulewidth}{0pt}
+
+% Section title formatting
+\titleformat{\section}
+  {\normalfont\Large\bfseries\color{hydrosensblue}\titlefont}
+  {}
+  {0em}
+  {}[\titlerule]
+
+\titleformat{\subsection}
+  {\normalfont\large\bfseries\color{hydrosenscyan}\subtitlefont}
+  {}
+  {0em}
+  {}
+
+% Document begin
+\begin{document}
+% Title page
+\begin{titlepage}
+\begin{center}
+\begin{minipage}{0.75\textwidth}
+    \raggedright
+    \HydroTitle{RSS-Hydro\vspace{0.5cm}}\\[0.1cm]
+    \HydroTitle{HYDROSENS}
+\end{minipage}
+\hfill
+\begin{minipage}{0.15\textwidth}
+    \includegraphics[width=\linewidth]{assets/images/logo.png}
+\end{minipage}
+\end{center}
+
+% Separator line
+\vspace{0.5\baselineskip}
+\noindent\color{hydrosenscyan}\rule{0.25\textwidth}{3pt}
+\vspace{1\baselineskip}
+
+% Subtitle
+\noindent
+\HydroSubtitle{ENVIRONMENTAL MONITORING REPORT}
+
+\vspace{1cm}
+
+% Region and Time Period
+\noindent
+\HydroSubtitle{AREA OF INTEREST:}
+\HydroContent{smallislandhcm}
+
+\vspace{0.2cm}
+
+\noindent
+\HydroSubtitle{\textbf{TIME PERIOD:}}
+\HydroContent{2025-07-01 - 2025-07-31}
+
+\vfill
+
+% Decorative Image with circle crop at bottom right
+\begin{tikzpicture}[remember picture, overlay]
+    % === Background block (hydrosenscyan), half the height of the circle ===
+    \fill[hydrosenscyan]
+        ([xshift=-\paperwidth,yshift=10cm]current page.south east) rectangle
+        ([xshift=0cm,yshift=0cm]current page.south east); % 2cm height = half of 4cm radius circle
+
+    % === Circular clipped image ===
+    \begin{scope}
+        \clip (current page.south east) ++(-4cm, 4cm) circle (20cm); % Adjust position and size
+        \node at ([xshift=-7cm, yshift=7cm]current page.south east)
+            {\includegraphics[width=20cm]{assets/images/intro.png}}; % Adjust image width
+    \end{scope}
+\end{tikzpicture}
+\end{titlepage}
+
+% Overview Page
+\noindent
+\HydroTitle{OVERVIEW}
+
+\vspace{0.3cm}
+
+% Light blue line under the heading
+\vspace{0.5\baselineskip}
+\noindent\color{hydrosenscyan}\rule{0.25\textwidth}{3pt}
+\vspace{1\baselineskip}
+
+% Body text
+\noindent   
+\begingroup
+  \setstretch{1.5}%
+  \contentfont
+  \color{black}%
+  \normalfont
+  \fontsize{16pt}{20pt}\selectfont
+Analysis of environmental data for smallislandhcm from 2025-07-01 to 2025-07-31, including NDVI, vegetation fraction, soil fraction, precipitation, temperature, and curve number. The data indicates moderate vegetation cover, minimal rainfall, warm temperatures, and a relatively high curve number, suggesting a high runoff potential in the area.
+\par
+\endgroup
+
+\begin{figure}[h!]
+    \centering
+    \includegraphics[width=\textwidth]{/app/data/assets/images/region\_screenshot.png}
+    \caption{\textit{Area of Interest}}
+\end{figure}
+
+% Key insights page
+\clearpage
+\noindent
+\begin{minipage}[t]{0.6\textwidth}
+
+\HydroTitle{KEY\vspace{0.5cm}}\\ % Adds vertical space *inside* the title box
+\HydroTitle{INSIGHTS}
+
+  \vspace{0.5\baselineskip}
+  \color{hydrosenscyan}\rule{0.25\textwidth}{3pt}
+  \vspace{1\baselineskip}
+
+  \setstretch{1.5}
+  \raggedright
+  \HydroContent{\textbf{1. Moderate Vegetation Cover}\\
+  NDVI and vegetation fraction indicate moderate vegetation.}
+
+  \vspace{0.6cm}
+  \HydroContent{\textbf{2. Low Precipitation}\\
+  Limited rainfall during the analyzed period.}
+
+  \vspace{0.6cm}
+  \HydroContent{\textbf{3. High Runoff Potential}\\
+  Curve number suggests considerable runoff potential.}
+
+  \vspace{0.6cm}
+  \HydroContent{\textbf{4. Warm Temperatures}\\
+  Temperature is relatively warm.}
+
+  \vspace{0.6cm}
+  \HydroContent{\textbf{5. Soil Fraction variation}\\
+  Soil fraction changes.}
+
+  \vspace{0.6cm}
+\end{minipage}%
+\hfill
+\begin{minipage}[t]{0.25\textwidth}
+% Background image on right half
+\begin{tikzpicture}[remember picture,overlay]
+  \node[anchor=north east, inner sep=0pt] at (current page.north east)
+    {\includegraphics[height=\paperheight]{assets/images/waterfall.png}};
+\end{tikzpicture}
+
+\end{minipage}
+
+% Metric pages
+\clearpage
+% Top border line
+\vspace*{-0.5cm}
+\noindent
+\color{teal}\rule{\textwidth}{2pt}
+\vspace{0.1cm}
+% Header
+\noindent
+\begin{tabular*}{\textwidth}{@{\extracolsep{\fill}} l }
+\textsf{\textbf{\small STATISTICS}} \\
+\end{tabular*}
+\vspace{0.2cm}
+% Title section
+\noindent 
+\begin{minipage}[t]{\textwidth}
+\begingroup
+  \setstretch{1.5}%
+  \titlefont
+  \color{hydrosensblue}%
+  \fontsize{40pt}{30pt}
+  \bfseries\selectfont
+  \noindent  
+\raggedright
+\mbox{NDVI}
+\par
+\endgroup
+\vspace{0.3cm}
+\par \textit{Normalized difference vegitation index - The greenness and density of vegetation from 0 to 1.}
+\end{minipage}
+\vspace{0.5cm}
+% Numbers section - Trend and Mean Value in a row
+\noindent
+\begin{tabularx}{\textwidth}{@{}X X@{}}
+  % Trend Section (Left)
+  \begin{minipage}[t]{0.45\textwidth}
+    {\subtitlefont\color{hydrosenscyan}\bfseries\fontsize{42pt}{32pt}\selectfont 10.72\%}
+    \begin{tikzpicture}[baseline=(current bounding box.base)]
+      % Up arrow for increasing trend
+      \draw[hydrosenscyan, line width=6pt, ->, >=stealth] (0,0) -- (0.45,0.65) -- (0.75,0.35) -- (1.2,1.1);
+    \end{tikzpicture}\\[0.2cm]
+    \noindent\color{hydrosenscyan}\rule{5.2cm}{2pt}
+    \vspace{0.3cm}
+    \setstretch{1.5}
+    \HydroSubtitle{\textbf{TREND}}\\[-0.3cm]
+  \end{minipage}
+  &
+  % Mean Value Section (Right)
+  \begin{minipage}[t]{0.45\textwidth}
+    {\subtitlefont\color{hydrosenscyan}\bfseries\fontsize{42pt}{32pt}\selectfont 0.30}\\[0.2cm]
+    \noindent\color{hydrosenscyan}\rule{5.2cm}{2pt}\\[0.2cm]
+    \vspace{0.3cm}
+    \HydroSubtitle{\textbf{MEAN VALUE}}\\[-0.3cm]
+    \setstretch{1.5}
+  \end{minipage}
+\end{tabularx}
+
+% Chart section - full width
+\noindent
+\begin{figure}[h!]
+    \centering
+    \includegraphics[width=\textwidth]{assets/graphs/ndvi.png}
+    \caption{{NDVI} time series}
+\end{figure}
+\vspace{0.5cm}
+
+% Time Series Insight section - full width, below chart
+\noindent
+\begin{minipage}[t]{\textwidth}
+  \HydroSubtitle{TIME SERIES INSIGHT}\\[-0.5ex]
+  \noindent\color{hydrosenscyan}\rule{6cm}{2pt}\\[0.2cm]
+  \setstretch{1.5}
+  \HydroContent{The NDVI values show a moderate level of greenness. It went from 0.24 to 0.35 between July 10th and July 25th. This indicates a modest but active vegetation.}
+\end{minipage}
+\vfill
+% Page number at bottom right
+\vspace{0.2cm}
+% Bottom border line
+\noindent\color{teal}\rule{\textwidth}{2pt}
+\vspace{0.2cm}
+\noindent
+\begin{tabular*}{\textwidth}{@{\extracolsep{\fill}} l r }
+ & \textsf{\textbf{\small PAGE 05}} \\
+\end{tabular*}
+
+\clearpage
+% Top border line
+\vspace*{-0.5cm}
+\noindent
+\color{teal}\rule{\textwidth}{2pt}
+\vspace{0.1cm}
+% Header
+\noindent
+\begin{tabular*}{\textwidth}{@{\extracolsep{\fill}} l }
+\textsf{\textbf{\small STATISTICS}} \\
+\end{tabular*}
+\vspace{0.2cm}
+% Title section
+\noindent 
+\begin{minipage}[t]{\textwidth}
+\begingroup
+  \setstretch{1.5}%
+  \titlefont
+  \color{hydrosensblue}%
+  \fontsize{40pt}{30pt}
+  \bfseries\selectfont
+  \noindent  
+\raggedright
+\mbox{VEGETATION}
+ \mbox{FRACTION}
+\par
+\endgroup
+\vspace{0.3cm}
+\par \textit{Proportion of ground covered by vegetation (0-1).}
+\end{minipage}
+\vspace{0.5cm}
+% Numbers section - Trend and Mean Value in a row
+\noindent
+\begin{tabularx}{\textwidth}{@{}X X@{}}
+  % Trend Section (Left)
+  \begin{minipage}[t]{0.45\textwidth}
+    {\subtitlefont\color{hydrosenscyan}\bfseries\fontsize{42pt}{32pt}\selectfont 0.44\%}
+    \begin{tikzpicture}[baseline=(current bounding box.base)]
+      % Up arrow for increasing trend
+      \draw[hydrosenscyan, line width=6pt, ->, >=stealth] (0,0) -- (0.45,0.65) -- (0.75,0.35) -- (1.2,1.1);
+    \end{tikzpicture}\\[0.2cm]
+    \noindent\color{hydrosenscyan}\rule{5.2cm}{2pt}
+    \vspace{0.3cm}
+    \setstretch{1.5}
+    \HydroSubtitle{\textbf{TREND}}\\[-0.3cm]
+  \end{minipage}
+  &
+  % Mean Value Section (Right)
+  \begin{minipage}[t]{0.45\textwidth}
+    {\subtitlefont\color{hydrosenscyan}\bfseries\fontsize{42pt}{32pt}\selectfont 0.34}\\[0.2cm]
+    \noindent\color{hydrosenscyan}\rule{5.2cm}{2pt}\\[0.2cm]
+    \vspace{0.3cm}
+    \HydroSubtitle{\textbf{MEAN VALUE}}\\[-0.3cm]
+    \setstretch{1.5}
+  \end{minipage}
+\end{tabularx}
+
+% Chart section - full width
+\noindent
+\begin{figure}[h!]
+    \centering
+    \includegraphics[width=\textwidth]{assets/graphs/vegetation\_fraction.png}
+    \caption{{VEGETATION FRACTION} time series}
+\end{figure}
+\vspace{0.5cm}
+
+% Time Series Insight section - full width, below chart
+\noindent
+\begin{minipage}[t]{\textwidth}
+  \HydroSubtitle{TIME SERIES INSIGHT}\\[-0.5ex]
+  \noindent\color{hydrosenscyan}\rule{6cm}{2pt}\\[0.2cm]
+  \setstretch{1.5}
+  \HydroContent{Vegetation fraction displays a modest coverage of around 34\%. From July 10th to July 25th, the values remained relatively stable, at 0.34 and 0.34 respectively. This indicates consistent but not extensive vegetation presence.}
+\end{minipage}
+\vfill
+% Page number at bottom right
+\vspace{0.2cm}
+% Bottom border line
+\noindent\color{teal}\rule{\textwidth}{2pt}
+\vspace{0.2cm}
+\noindent
+\begin{tabular*}{\textwidth}{@{\extracolsep{\fill}} l r }
+ & \textsf{\textbf{\small PAGE 06}} \\
+\end{tabular*}
+
+\clearpage
+% Top border line
+\vspace*{-0.5cm}
+\noindent
+\color{teal}\rule{\textwidth}{2pt}
+\vspace{0.1cm}
+% Header
+\noindent
+\begin{tabular*}{\textwidth}{@{\extracolsep{\fill}} l }
+\textsf{\textbf{\small STATISTICS}} \\
+\end{tabular*}
+\vspace{0.2cm}
+% Title section
+\noindent 
+\begin{minipage}[t]{\textwidth}
+\begingroup
+  \setstretch{1.5}%
+  \titlefont
+  \color{hydrosensblue}%
+  \fontsize{40pt}{30pt}
+  \bfseries\selectfont
+  \noindent  
+\raggedright
+\mbox{SOIL}
+ \mbox{FRACTION}
+\par
+\endgroup
+\vspace{0.3cm}
+\par \textit{Proportion of ground covered by soil (0-1).}
+\end{minipage}
+\vspace{0.5cm}
+% Numbers section - Trend and Mean Value in a row
+\noindent
+\begin{tabularx}{\textwidth}{@{}X X@{}}
+  % Trend Section (Left)
+  \begin{minipage}[t]{0.45\textwidth}
+    {\subtitlefont\color{hydrosenscyan}\bfseries\fontsize{42pt}{32pt}\selectfont 8.98\%}
+    \begin{tikzpicture}[baseline=(current bounding box.base)]
+      % Down arrow for decreasing trend
+      \draw[hydrosenscyan, line width=6pt, ->, >=stealth] (0,1.1) -- (0.45,0.45) -- (0.75,0.75) -- (1.2,0);
+    \end{tikzpicture}\\[0.2cm]
+    \noindent\color{hydrosenscyan}\rule{5.2cm}{2pt}
+    \vspace{0.3cm}
+    \setstretch{1.5}
+    \HydroSubtitle{\textbf{TREND}}\\[-0.3cm]
+  \end{minipage}
+  &
+  % Mean Value Section (Right)
+  \begin{minipage}[t]{0.45\textwidth}
+    {\subtitlefont\color{hydrosenscyan}\bfseries\fontsize{42pt}{32pt}\selectfont 0.14}\\[0.2cm]
+    \noindent\color{hydrosenscyan}\rule{5.2cm}{2pt}\\[0.2cm]
+    \vspace{0.3cm}
+    \HydroSubtitle{\textbf{MEAN VALUE}}\\[-0.3cm]
+    \setstretch{1.5}
+  \end{minipage}
+\end{tabularx}
+
+% Chart section - full width
+\noindent
+\begin{figure}[h!]
+    \centering
+    \includegraphics[width=\textwidth]{assets/graphs/soil\_fraction.png}
+    \caption{{SOIL FRACTION} time series}
+\end{figure}
+\vspace{0.5cm}
+
+% Time Series Insight section - full width, below chart
+\noindent
+\begin{minipage}[t]{\textwidth}
+  \HydroSubtitle{TIME SERIES INSIGHT}\\[-0.5ex]
+  \noindent\color{hydrosenscyan}\rule{6cm}{2pt}\\[0.2cm]
+  \setstretch{1.5}
+  \HydroContent{The soil fraction values decreased from 0.18 on July 10th to 0.09 on July 25th. In July, a drop in soil fraction is correlated with increased vegetation, suggesting a healthier land.}
+\end{minipage}
+\vfill
+% Page number at bottom right
+\vspace{0.2cm}
+% Bottom border line
+\noindent\color{teal}\rule{\textwidth}{2pt}
+\vspace{0.2cm}
+\noindent
+\begin{tabular*}{\textwidth}{@{\extracolsep{\fill}} l r }
+ & \textsf{\textbf{\small PAGE 07}} \\
+\end{tabular*}
+
+\clearpage
+% Top border line
+\vspace*{-0.5cm}
+\noindent
+\color{teal}\rule{\textwidth}{2pt}
+\vspace{0.1cm}
+% Header
+\noindent
+\begin{tabular*}{\textwidth}{@{\extracolsep{\fill}} l }
+\textsf{\textbf{\small STATISTICS}} \\
+\end{tabular*}
+\vspace{0.2cm}
+% Title section
+\noindent 
+\begin{minipage}[t]{\textwidth}
+\begingroup
+  \setstretch{1.5}%
+  \titlefont
+  \color{hydrosensblue}%
+  \fontsize{40pt}{30pt}
+  \bfseries\selectfont
+  \noindent  
+\raggedright
+\mbox{PRECIPITATION}
+\par
+\endgroup
+\vspace{0.3cm}
+\par \textit{Amount of rainfall in millimeters.}
+\end{minipage}
+\vspace{0.5cm}
+% Numbers section - Trend and Mean Value in a row
+\noindent
+\begin{tabularx}{\textwidth}{@{}X X@{}}
+  % Trend Section (Left)
+  \begin{minipage}[t]{0.45\textwidth}
+    {\subtitlefont\color{hydrosenscyan}\bfseries\fontsize{42pt}{32pt}\selectfont 79.58\%}
+    \begin{tikzpicture}[baseline=(current bounding box.base)]
+      % Down arrow for decreasing trend
+      \draw[hydrosenscyan, line width=6pt, ->, >=stealth] (0,1.1) -- (0.45,0.45) -- (0.75,0.75) -- (1.2,0);
+    \end{tikzpicture}\\[0.2cm]
+    \noindent\color{hydrosenscyan}\rule{5.2cm}{2pt}
+    \vspace{0.3cm}
+    \setstretch{1.5}
+    \HydroSubtitle{\textbf{TREND}}\\[-0.3cm]
+  \end{minipage}
+  &
+  % Mean Value Section (Right)
+  \begin{minipage}[t]{0.45\textwidth}
+    {\subtitlefont\color{hydrosenscyan}\bfseries\fontsize{42pt}{32pt}\selectfont 1.90}\\[0.2cm]
+    \noindent\color{hydrosenscyan}\rule{5.2cm}{2pt}\\[0.2cm]
+    \vspace{0.3cm}
+    \HydroSubtitle{\textbf{MEAN VALUE}}\\[-0.3cm]
+    \setstretch{1.5}
+  \end{minipage}
+\end{tabularx}
+
+% Chart section - full width
+\noindent
+\begin{figure}[h!]
+    \centering
+    \includegraphics[width=\textwidth]{assets/graphs/precipitation.png}
+    \caption{{PRECIPITATION} time series}
+\end{figure}
+\vspace{0.5cm}
+
+% Time Series Insight section - full width, below chart
+\noindent
+\begin{minipage}[t]{\textwidth}
+  \HydroSubtitle{TIME SERIES INSIGHT}\\[-0.5ex]
+  \noindent\color{hydrosenscyan}\rule{6cm}{2pt}\\[0.2cm]
+  \setstretch{1.5}
+  \HydroContent{Precipitation levels are low, fluctuating between 3.16 mm on July 10th and 0.64 mm on July 25th. Given the low values, the water availability may be limited.}
+\end{minipage}
+\vfill
+% Page number at bottom right
+\vspace{0.2cm}
+% Bottom border line
+\noindent\color{teal}\rule{\textwidth}{2pt}
+\vspace{0.2cm}
+\noindent
+\begin{tabular*}{\textwidth}{@{\extracolsep{\fill}} l r }
+ & \textsf{\textbf{\small PAGE 08}} \\
+\end{tabular*}
+
+\clearpage
+% Top border line
+\vspace*{-0.5cm}
+\noindent
+\color{teal}\rule{\textwidth}{2pt}
+\vspace{0.1cm}
+% Header
+\noindent
+\begin{tabular*}{\textwidth}{@{\extracolsep{\fill}} l }
+\textsf{\textbf{\small STATISTICS}} \\
+\end{tabular*}
+\vspace{0.2cm}
+% Title section
+\noindent 
+\begin{minipage}[t]{\textwidth}
+\begingroup
+  \setstretch{1.5}%
+  \titlefont
+  \color{hydrosensblue}%
+  \fontsize{40pt}{30pt}
+  \bfseries\selectfont
+  \noindent  
+\raggedright
+\mbox{TEMPERATURE}
+\par
+\endgroup
+\vspace{0.3cm}
+\par \textit{The measure of atmospheric heat in °C.}
+\end{minipage}
+\vspace{0.5cm}
+% Numbers section - Trend and Mean Value in a row
+\noindent
+\begin{tabularx}{\textwidth}{@{}X X@{}}
+  % Trend Section (Left)
+  \begin{minipage}[t]{0.45\textwidth}
+    {\subtitlefont\color{hydrosenscyan}\bfseries\fontsize{42pt}{32pt}\selectfont 2.17\%}
+    \begin{tikzpicture}[baseline=(current bounding box.base)]
+      % Up arrow for increasing trend
+      \draw[hydrosenscyan, line width=6pt, ->, >=stealth] (0,0) -- (0.45,0.65) -- (0.75,0.35) -- (1.2,1.1);
+    \end{tikzpicture}\\[0.2cm]
+    \noindent\color{hydrosenscyan}\rule{5.2cm}{2pt}
+    \vspace{0.3cm}
+    \setstretch{1.5}
+    \HydroSubtitle{\textbf{TREND}}\\[-0.3cm]
+  \end{minipage}
+  &
+  % Mean Value Section (Right)
+  \begin{minipage}[t]{0.45\textwidth}
+    {\subtitlefont\color{hydrosenscyan}\bfseries\fontsize{42pt}{32pt}\selectfont 28.37}\\[0.2cm]
+    \noindent\color{hydrosenscyan}\rule{5.2cm}{2pt}\\[0.2cm]
+    \vspace{0.3cm}
+    \HydroSubtitle{\textbf{MEAN VALUE}}\\[-0.3cm]
+    \setstretch{1.5}
+  \end{minipage}
+\end{tabularx}
+
+% Chart section - full width
+\noindent
+\begin{figure}[h!]
+    \centering
+    \includegraphics[width=\textwidth]{assets/graphs/temperature.png}
+    \caption{{TEMPERATURE} time series}
+\end{figure}
+\vspace{0.5cm}
+
+% Time Series Insight section - full width, below chart
+\noindent
+\begin{minipage}[t]{\textwidth}
+  \HydroSubtitle{TIME SERIES INSIGHT}\\[-0.5ex]
+  \noindent\color{hydrosenscyan}\rule{6cm}{2pt}\\[0.2cm]
+  \setstretch{1.5}
+  \HydroContent{Temperature remains consistently high throughout the observation period. This warm temperature can affect evaporation rates and water balance in the ecosystem.}
+\end{minipage}
+\vfill
+% Page number at bottom right
+\vspace{0.2cm}
+% Bottom border line
+\noindent\color{teal}\rule{\textwidth}{2pt}
+\vspace{0.2cm}
+\noindent
+\begin{tabular*}{\textwidth}{@{\extracolsep{\fill}} l r }
+ & \textsf{\textbf{\small PAGE 09}} \\
+\end{tabular*}
+
+\clearpage
+% Top border line
+\vspace*{-0.5cm}
+\noindent
+\color{teal}\rule{\textwidth}{2pt}
+\vspace{0.1cm}
+% Header
+\noindent
+\begin{tabular*}{\textwidth}{@{\extracolsep{\fill}} l }
+\textsf{\textbf{\small STATISTICS}} \\
+\end{tabular*}
+\vspace{0.2cm}
+% Title section
+\noindent 
+\begin{minipage}[t]{\textwidth}
+\begingroup
+  \setstretch{1.5}%
+  \titlefont
+  \color{hydrosensblue}%
+  \fontsize{40pt}{30pt}
+  \bfseries\selectfont
+  \noindent  
+\raggedright
+\mbox{CURVE}
+ \mbox{NUMBER}
+\par
+\endgroup
+\vspace{0.3cm}
+\par \textit{Direct surface runoff from a rainfall event (1-100).}
+\end{minipage}
+\vspace{0.5cm}
+% Numbers section - Trend and Mean Value in a row
+\noindent
+\begin{tabularx}{\textwidth}{@{}X X@{}}
+  % Trend Section (Left)
+  \begin{minipage}[t]{0.45\textwidth}
+    {\subtitlefont\color{hydrosenscyan}\bfseries\fontsize{42pt}{32pt}\selectfont 1.35\%}
+    \begin{tikzpicture}[baseline=(current bounding box.base)]
+      % Up arrow for increasing trend
+      \draw[hydrosenscyan, line width=6pt, ->, >=stealth] (0,0) -- (0.45,0.65) -- (0.75,0.35) -- (1.2,1.1);
+    \end{tikzpicture}\\[0.2cm]
+    \noindent\color{hydrosenscyan}\rule{5.2cm}{2pt}
+    \vspace{0.3cm}
+    \setstretch{1.5}
+    \HydroSubtitle{\textbf{TREND}}\\[-0.3cm]
+  \end{minipage}
+  &
+  % Mean Value Section (Right)
+  \begin{minipage}[t]{0.45\textwidth}
+    {\subtitlefont\color{hydrosenscyan}\bfseries\fontsize{42pt}{32pt}\selectfont 89.64}\\[0.2cm]
+    \noindent\color{hydrosenscyan}\rule{5.2cm}{2pt}\\[0.2cm]
+    \vspace{0.3cm}
+    \HydroSubtitle{\textbf{MEAN VALUE}}\\[-0.3cm]
+    \setstretch{1.5}
+  \end{minipage}
+\end{tabularx}
+
+% Chart section - full width
+\noindent
+\begin{figure}[h!]
+    \centering
+    \includegraphics[width=\textwidth]{assets/graphs/curve\_number.png}
+    \caption{{CURVE NUMBER} time series}
+\end{figure}
+\vspace{0.5cm}
+
+% Time Series Insight section - full width, below chart
+\noindent
+\begin{minipage}[t]{\textwidth}
+  \HydroSubtitle{TIME SERIES INSIGHT}\\[-0.5ex]
+  \noindent\color{hydrosenscyan}\rule{6cm}{2pt}\\[0.2cm]
+  \setstretch{1.5}
+  \HydroContent{Curve number values are elevated, indicating a high runoff potential. This is consistent with built-up areas. The CN values imply that this area is prone to surface runoff. }
+\end{minipage}
+\vfill
+% Page number at bottom right
+\vspace{0.2cm}
+% Bottom border line
+\noindent\color{teal}\rule{\textwidth}{2pt}
+\vspace{0.2cm}
+\noindent
+\begin{tabular*}{\textwidth}{@{\extracolsep{\fill}} l r }
+ & \textsf{\textbf{\small PAGE 10}} \\
+\end{tabular*}
+
+
+\end{document}
