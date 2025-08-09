@@ -5,5 +5,8 @@
 __pycache__
 .DS_Store
 
+api-app/data/assets/graphs
+api-app/data/assets/images
+api-app/data/generated_reports
 /hydrosens/data
 output
