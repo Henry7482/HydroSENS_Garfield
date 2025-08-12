@@ -578,3 +578,127 @@ def doMESMA(class_list, img, trim_lib):
 
 def nan_to_zero(x):
     return 0 if math.isnan(x) else x
+
+def clip_tif_files_to_polygon(output_folder, coordinates, crs, files_to_clip=None, nodata_value=255):
+    """
+    Clip multiple TIF files to polygon shape defined by coordinates.
+    
+    This function ensures that instead of having bounding box rasters, we get precise 
+    polygon-clipped rasters that match the exact area of interest defined by the coordinates.
+    
+    Parameters:
+        output_folder: Path to the output folder containing TIF files
+        coordinates: List of [lon, lat] pairs defining the polygon boundary
+        crs: Coordinate reference system (string format like 'EPSG:4326')
+        files_to_clip: List of tuples (input_filename, output_filename) for files to clip.
+                      If None, uses default list of common files.
+        nodata_value: Value to use for areas outside the polygon (default: 255)
+    
+    Returns:
+        dict: Summary of clipping results with success/failure counts
+    """
+    import os
+    
+    # Default list of files to clip if none provided
+    if files_to_clip is None:
+        files_to_clip = [
+            ("impervious.tif", "impervious_clipped.tif"),
+            ("NDVI.tif", "NDVI_clipped.tif"), 
+            ("soil.tif", "soil_clipped.tif"),
+            ("TCI.tif", "TCI_clipped.tif"),
+            ("vegetation.tif", "vegetation_clipped.tif")
+        ]
+    
+    print("Post-processing: Clipping TIF files to polygon shape...")
+    print(f"  Target folder: {output_folder}")
+    print(f"  Polygon vertices: {len(coordinates)}")
+    
+    success_count = 0
+    failure_count = 0
+    not_found_count = 0
+    results = {}
+    
+    for input_file, output_file in files_to_clip:
+        input_path = os.path.join(output_folder, input_file)
+        output_path = os.path.join(output_folder, output_file)
+        
+        if os.path.exists(input_path):
+            try:
+                # Use the existing Extract function to clip the file
+                Extract(input_path, coordinates, crs, output_path, nodata_value=nodata_value)
+                print(f"  ✓ Clipped {input_file} to polygon shape")
+                
+                # Replace original file with clipped version
+                os.remove(input_path)
+                os.rename(output_path, input_path)
+                print(f"  ✓ Replaced {input_file} with clipped version")
+                
+                success_count += 1
+                results[input_file] = "success"
+                
+            except Exception as e:
+                print(f"  ⚠️ Warning: Could not clip {input_file}: {e}")
+                # Clean up failed output file if it exists
+                if os.path.exists(output_path):
+                    os.remove(output_path)
+                
+                failure_count += 1
+                results[input_file] = f"failed: {str(e)}"
+        else:
+            print(f"  ⚠️ Warning: {input_file} not found for clipping")
+            not_found_count += 1
+            results[input_file] = "not_found"
+    
+    # Print summary
+    print(f"\nClipping Summary:")
+    print(f"  ✓ Successfully clipped: {success_count} files")
+    print(f"  ⚠️ Failed to clip: {failure_count} files")
+    print(f"  ❌ Not found: {not_found_count} files")
+    print(f"  Total processed: {len(files_to_clip)} files")
+    
+    return {
+        "success_count": success_count,
+        "failure_count": failure_count,
+        "not_found_count": not_found_count,
+        "total_files": len(files_to_clip),
+        "results": results
+    }
+
+
+def get_default_clipping_files():
+    """
+    Get the default list of files that are commonly clipped to polygon shape.
+    
+    Returns:
+        list: List of tuples (input_filename, output_filename) for default clipping
+    """
+    return [
+        ("impervious.tif", "impervious_clipped.tif"),
+        ("NDVI.tif", "NDVI_clipped.tif"), 
+        ("soil.tif", "soil_clipped.tif"),
+        ("TCI.tif", "TCI_clipped.tif"),
+        ("vegetation.tif", "vegetation_clipped.tif")
+    ]
+
+
+def clip_custom_tif_files(output_folder, coordinates, crs, file_list, nodata_value=255):
+    """
+    Clip a custom list of TIF files to polygon shape.
+    
+    This is a convenience function for when you want to clip specific files
+    that are not in the default list.
+    
+    Parameters:
+        output_folder: Path to the output folder containing TIF files
+        coordinates: List of [lon, lat] pairs defining the polygon boundary
+        crs: Coordinate reference system (string format like 'EPSG:4326')
+        file_list: List of filenames (without .tif extension) to clip
+        nodata_value: Value to use for areas outside the polygon (default: 255)
+    
+    Returns:
+        dict: Summary of clipping results with success/failure counts
+    """
+    # Convert simple filename list to tuple format
+    files_to_clip = [(f"{filename}.tif", f"{filename}_clipped.tif") for filename in file_list]
+    
+    return clip_tif_files_to_polygon(output_folder, coordinates, crs, files_to_clip, nodata_value)

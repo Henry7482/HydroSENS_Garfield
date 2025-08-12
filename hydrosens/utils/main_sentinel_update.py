@@ -524,6 +524,15 @@ def process_specific_dates(dates_to_process, aoi, output_master, region_name, am
         # Clean up output folder - keep only essential files
         cleanup_output_folder(output)
 
+        # Post-processing: Clip all important TIF files to polygon shape
+        # This ensures that instead of having bounding box rasters, we get precise polygon-clipped rasters
+        # that match the exact area of interest defined by the coordinates
+        clipping_results = clip_tif_files_to_polygon(output, coordinates, crs)
+        
+        # Store clipping results for potential debugging or reporting
+        if clipping_results['failure_count'] > 0:
+            print(f"Warning: {clipping_results['failure_count']} files failed to clip properly")
+
     # Create results dictionary for only the dates that were successfully processed
     formatted_data = {}
     
