@@ -1,4 +1,17 @@
 services:
+    frontend:
+        build:
+            context: ./frontend # Frontend React application
+        container_name: frontend
+        ports:
+            - "3000:80" # Expose nginx on port 3000
+        networks:
+            - app-network
+        depends_on:
+            - api
+            - hydrosens
+        restart: unless-stopped
+
     hydrosens:
         build:
             context: ./hydrosens # Folder where the HydroSENS Dockerfile is
