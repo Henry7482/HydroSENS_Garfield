@@ -1,4 +1,22 @@
 services:
+    frontend:
+        build:
+            context: ./frontend # Frontend React application
+        container_name: frontend
+        ports:
+            - "3000:5173" 
+        volumes:
+            - ./frontend:/app 
+            - /app/node_modules 
+        environment:
+            - VITE_BACKEND_API_URL=http://localhost:5050
+        networks:
+            - app-network
+        depends_on:
+            - api
+            - hydrosens
+        restart: unless-stopped
+
     hydrosens:
         build:
             context: ./hydrosens # Folder where the HydroSENS Dockerfile is
