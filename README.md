@@ -1,39 +1,16 @@
-# HydroSENS
-
-HydroSENS is an algorithm for the automatic hydrological characterization of natural and urban landscapes.
-
-## Prerequisites
-
-You will need to download the GDAL package natively on your machine to run the project.
-
-For MacOS:
-
-```bash
-brew install gdal
-```
-
-For Ubuntu / Debian:
-
-```bash
-sudo apt update
-sudo apt install gdal-bin libgdal-dev
-```
-
-More info: https://gdal.org/en/stable/download.html
-
-## Data
-
-The required inputs include:
-
--   Shapefile of the intended study area in a projected coordinate system
--   Soil Texture Classes (USDA System) dataset by Hengl (2018). The dataset is available online at: https://zenodo.org/records/2525817.
--   Spectral library file (Data sourced from USGS)
--   Curve Number lookup table
-
-The algorithm is currently designed to extract optical imagery and digital elevation models (DEMs) from Google Earth Engine (GEE)
-
-## References
-
-United States Geological Survey. (n.d.). USGS Spectral Library Version 7 [dataset]. https://doi.org/10.3133/ds1035
-
-Hengl, T. (2018). Soil texture classes (USDA system) for 6 soil depths (0, 10, 30, 60, 100 and 200 cm) at 250 m (v0.2) [dataset]. Zenodo. https://doi.org/10.5281/zenodo.2525817
+## To run this backend app, you will need these requirements:
+- Include a .secret folder  in the hydrosens folder, the .secret contains the json file 
+of your GEE key.
+- In the /hydrosens/data folder (Create one if you have not had), you will need to:
+    + Include these files, they can be found in the hydrosens original repo: 
+        CN_lookup.csv
+        sol_texture.class_usda.tt_m_250m_b0..0cm_1950..2017_v0.2
+        VIS_speclib_landsat.csv
+        VIS_speclib_sentinel.csv
+    + Create a /shape folder if you have not had
+- To run the backend, use:
+    docker-compose up --build (Windows)
+    docker compose up --build (Mac)
+- The application consists of two sub-containers:
+    hydrosens: Can be access through localhost:5000
+    api-app: Can be access through localhost:5050

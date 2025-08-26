@@ -1,0 +1,141 @@
+# generate_report.py
+import os
+import shutil
+from .report_templating import render_latex_template
+from .latex_utils import compile_latex_to_pdf
+from .generate_content import generate_content
+from .trend_calculator import calculate_trends
+from data.templates.mock_data import report_data
+from .satellite_map_generator import generate_region_satellite_map, extract_coordinates_from_metrics
+from .generate_graph import generate_graphs
+from .GEE_satellite_map_generator import generate_region_satellite_map_gee
+
+def run_generate_report(metrics_data, report_name):
+    # --- Configuration ---
+    print("Report name: ", report_name)
+    TEMPLATE_DIR = "/app/data/templates"  # Directory where the LaTeX template is stored
+    TEMPLATE_FILENAME = "report_template.tex.j2" # Assumes file-based template
+    
+    # Determine output directory and filename from report_name
+    if os.path.isabs(report_name) or '/' in report_name or '\\' in report_name:
+        # report_name is a full path, extract directory and filename
+        output_dir = os.path.dirname(report_name)
+        jobname = os.path.splitext(os.path.basename(report_name))[0]
+    else:
+        # report_name is just a name, use default directory
+        output_dir = "./data/generated_reports"
+        jobname = report_name
+    
+    KEEP_TEX = True # Set to False to delete the .tex file after compilation
+
+    # --- 1. Get data for the Report ---
+    print("Step 1: Generating content...")
+    report_data = generate_content(metrics_data)
+    # report_data = metrics_data # FOR DEMO ONLY
+
+    # --- 1.5. Calculate trends using linear regression ---
+    print("Step 1.5: Calculating trends...")
+    trends = calculate_trends(metrics_data)
+    
+    # Insert calculated trends into report_data
+    if report_data and "metrics" in report_data:
+        for metric in report_data["metrics"]:
+            metric_id = metric.get("id")
+            if metric_id in trends:
+                metric["trend"] = trends[metric_id]
+                print(f"Updated trend for {metric_id}: {trends[metric_id]}")
+
+    # --- 2. Generate graphs using Mathplotlib ---
+    """
+    Use metrics_data to generate timeseries graphs, save as image in assets/graphs.
+    Add image path to each metric datapoint by id (graph_image_path)
+    """  
+    print("Step 2: Generating graphs...")
+    # This function should be defined in your utils/generate_graph.py
+    report_data = generate_graphs(metrics_data, report_data)
+    if not report_data:
+        print("No graphs generated, check metrics_data format.")
+    else:
+        print("Graphs generated successfully")
+
+
+    print("Step 3: Generating region satellite map...")
+    try:
+        coordinates = extract_coordinates_from_metrics(metrics_data)
+        print(f"Using coordinates: {coordinates[:2] if len(coordinates) > 2 else coordinates}")
+        
+        # success = generate_region_satellite_map(
+        #     coordinates=coordinates,
+        #     output_path="/app/data/assets/images/region_screenshot.png",
+        #     edge_color='none',
+        #     face_color='none',
+        #     line_width=3,
+        #     zoom='auto'
+        # )
+
+        success = generate_region_satellite_map_gee(
+            coordinates=coordinates,
+            output_path="/app/data/assets/images/region_screenshot.png",
+            edge_color='cyan',
+            face_color='blue',
+            alpha=0.05,
+            use_gee_first=True,
+            add_watermark=True,
+            watermark_position="bottom-left"
+        )
+                        
+        if success:
+            print("Region satellite map generated successfully")
+        else:
+            print("Satellite map generation failed, creating fallback...")
+        
+        report_data["region_screenshot_path"] = "/app/data/assets/images/region_screenshot.png"
+
+    except Exception as e:
+        print(f"Error in satellite map generation: {e}")
+
+
+    # --- 4. Render the LaTeX template ---
+    print("Step 4: Rendering LaTeX template...")
+    # Option A: Load template from file
+    template_full_path = os.path.join(TEMPLATE_DIR, TEMPLATE_FILENAME)
+    if not os.path.exists(template_full_path):
+        print(f"Error: Template file not found at {template_full_path}")
+        print("Please create 'templates/report_template.tex.j2' or check the path.")
+        return
+
+    rendered_latex = render_latex_template(template_full_path, report_data, TEMPLATE_DIR)
+    
+    # Option B: Use a raw string template (if you prefer not to use files for templates)
+    # raw_latex_template_string = r""" \documentclass{article} ... \VAR{your_data | e} ... \end{document} """
+    # rendered_latex = render_latex_from_string_template(raw_latex_template_string, report_data)
+
+    if not rendered_latex:
+        print("Failed to render LaTeX template.")
+        return
+    print("\n--- Rendered LaTeX ---")
+    # print(rendered_latex[:1000] + "...\n--------------------")
+
+
+    # --- 5. Compile the rendered LaTeX to PDF ---
+    print("\nStep 5: Compiling LaTeX to PDF...")
+    pdf_file_path = compile_latex_to_pdf(
+        latex_content=rendered_latex,
+        jobname=jobname,
+        output_dir=output_dir,
+        use_latexmk=True, # Recommended
+        latex_engine="xelatex", # latexmk will use this engine
+        assets_paths=None,
+        keep_tex_file=KEEP_TEX
+    )
+
+    if pdf_file_path:
+        print(f"\nReport generation successful! PDF saved to: {pdf_file_path}")
+    else:
+        print("\nReport generation failed.")
+
+    return pdf_file_path
+
+# For demo
+if __name__ == "__main__":
+    run_generate_report(report_data)

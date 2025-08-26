@@ -1,0 +1,308 @@
+\documentclass[12pt,a4paper]{article}
+\usepackage[utf8]{inputenc}
+\usepackage{geometry}
+\usepackage{graphicx}
+\usepackage{xcolor}
+\usepackage{titlesec}
+\usepackage{fancyhdr}
+\usepackage{enumitem}
+\usepackage{pgfplots}
+\usepackage{fontspec}
+\usepackage{setspace}
+\usepackage{tabularx}
+\usepackage{tikz}
+\usepackage[absolute,overlay]{textpos}
+\pgfplotsset{compat=1.18}
+
+% Define custom colors
+\definecolor{hydrosensblue}{RGB}{37, 51, 114}
+\definecolor{hydrosenscyan}{RGB}{81, 186, 215}
+
+% Page margins
+\geometry{
+    top=2cm,
+    bottom=2cm,
+    left=2cm,
+    right=2cm
+}
+
+% Load custom fonts
+\newfontfamily\titlefont[
+  Path = assets/fonts/,
+  UprightFont = JosefinSlab-Regular,
+  BoldFont = JosefinSlab-Bold
+]{Josefin Slab}
+
+\newfontfamily\subtitlefont[
+  Path = assets/fonts/,
+  UprightFont = LibreBaskerville-Regular,
+  BoldFont = LibreBaskerville-Bold
+]{Libre Baskerville}
+
+\newfontfamily\contentfont[
+  Path = assets/fonts/,
+  UprightFont = LibreBaskerville-Regular
+]{Libre Baskerville}
+
+% Custom styling commands
+\newcommand{\HydroTitle}[1]{%
+    {\titlefont\color{hydrosensblue}\bfseries\fontsize{60pt}{40pt}\selectfont #1}
+}
+
+\newcommand{\HydroSubtitle}[1]{%
+    {\subtitlefont\color{hydrosensblue}\bfseries\fontsize{16pt}{20pt}\selectfont #1}
+}
+
+\newcommand{\HydroContent}[1]{%
+{\contentfont\color{black}\normalfont\fontsize{16pt}{20pt}\selectfont #1}
+}
+
+% Fancy header/footer
+\pagestyle{fancy}
+\fancyhead{}
+\fancyfoot{}
+\renewcommand{\headrulewidth}{0pt}
+\renewcommand{\footrulewidth}{0pt}
+
+% Section title formatting
+\titleformat{\section}
+  {\normalfont\Large\bfseries\color{hydrosensblue}\titlefont}
+  {}
+  {0em}
+  {}[\titlerule]
+
+\titleformat{\subsection}
+  {\normalfont\large\bfseries\color{hydrosenscyan}\subtitlefont}
+  {}
+  {0em}
+  {}
+
+% Document begin
+\begin{document}
+% Title page
+\begin{titlepage}
+\begin{center}
+\begin{minipage}{0.75\textwidth}
+    \raggedright
+    \HydroTitle{RSS\vspace{0.5cm}}\\[0.1cm]
+    \HydroTitle{HYDROSENS}
+\end{minipage}
+\hfill
+\begin{minipage}{0.15\textwidth}
+    \includegraphics[width=\linewidth]{assets/images/logo.png}
+\end{minipage}
+\end{center}
+
+% Separator line
+\vspace{0.5\baselineskip}
+\noindent\color{hydrosenscyan}\rule{0.25\textwidth}{3pt}
+\vspace{1\baselineskip}
+
+% Subtitle
+\noindent
+\HydroSubtitle{ENVIRONMENTAL MONITORING REPORT}
+
+\vspace{1cm}
+
+% Region and Time Period
+\noindent
+\HydroSubtitle{REGION:}
+\HydroContent{\VAR{ location | e }}
+
+\vspace{0.2cm}
+
+\noindent
+\HydroSubtitle{\textbf{TIME PERIOD:}}
+\HydroContent{\VAR{ time_period | e }}
+
+\vfill
+
+% Decorative Image with circle crop at bottom right
+\begin{tikzpicture}[remember picture, overlay]
+    % === Background block (hydrosenscyan), half the height of the circle ===
+    \fill[hydrosenscyan]
+        ([xshift=-\paperwidth,yshift=10cm]current page.south east) rectangle
+        ([xshift=0cm,yshift=0cm]current page.south east); % 2cm height = half of 4cm radius circle
+
+    % === Circular clipped image ===
+    \begin{scope}
+        \clip (current page.south east) ++(-4cm, 4cm) circle (20cm); % Adjust position and size
+        \node at ([xshift=-7cm, yshift=7cm]current page.south east)
+            {\includegraphics[width=20cm]{assets/images/intro.png}}; % Adjust image width
+    \end{scope}
+\end{tikzpicture}
+\end{titlepage}
+
+% Overview Page
+\noindent
+\HydroTitle{OVERVIEW}
+
+\vspace{0.3cm}
+
+% Light blue line under the heading
+\vspace{0.5\baselineskip}
+\noindent\color{hydrosenscyan}\rule{0.25\textwidth}{3pt}
+\vspace{1\baselineskip}
+
+% Body text
+\noindent   
+\begingroup
+  \setstretch{1.5}%
+  \contentfont
+  \color{black}%
+  \normalfont
+  \fontsize{16pt}{20pt}\selectfont
+\VAR{ overview | e }
+\par
+\endgroup
+
+\begin{tikzpicture}[remember picture, overlay]
+    \node[anchor=south, yshift=1.5cm] at (current page.south) {
+        \includegraphics[width=\textwidth, height=50cm, keepaspectratio]{\VAR{ region_screenshot_path | e }};
+    };
+\end{tikzpicture}
+
+% Key insights page
+\clearpage
+\noindent
+\begin{minipage}[t]{0.6\textwidth}
+
+\HydroTitle{KEY\vspace{0.5cm}}\\ % Adds vertical space *inside* the title box
+\HydroTitle{INSIGHTS}
+
+  \vspace{0.5\baselineskip}
+  \color{hydrosenscyan}\rule{0.25\textwidth}{3pt}
+  \vspace{1\baselineskip}
+
+  \setstretch{1.5}
+  \raggedright
+  \BLOCK{ for insight in key_insights }
+  \HydroContent{\textbf{\VAR{ loop.index }. \VAR{ insight.title | e }}\\
+  \VAR{ insight.detail | e }}
+
+  \vspace{0.6cm}
+  \BLOCK{ endfor }
+\end{minipage}%
+\hfill
+\begin{minipage}[t]{0.25\textwidth}
+% Background image on right half
+\begin{tikzpicture}[remember picture,overlay]
+  \node[anchor=north east, inner sep=0pt] at (current page.north east)
+    {\includegraphics[height=\paperheight]{assets/images/waterfall.png}};
+\end{tikzpicture}
+
+\end{minipage}
+
+% Metric pages
+\BLOCK{ for metric in metrics }
+\BLOCK{ if metric.selected }
+\clearpage
+% Top border line
+\vspace*{-0.5cm}
+\noindent
+\color{teal}\rule{\textwidth}{2pt}
+\vspace{0.3cm}
+
+% Header with page number
+\noindent
+\begin{tabular*}{\textwidth}{@{\extracolsep{\fill}} l r }
+\textsf{\textbf{\small STATISTICS}} & \textsf{\textbf{\small PAGE \VAR{ "%02d"|format(loop.index + 4) }}} \\
+\end{tabular*}
+
+\vspace{0.7cm}
+
+% Title and Mean Value aligned on the same line
+\noindent
+\begin{tabularx}{\textwidth}{@{}X r@{}}
+  \begin{minipage}[t]{0.5\textwidth}
+
+\begingroup
+  \setstretch{1.5}%
+  \titlefont
+  \color{hydrosensblue}%
+  \fontsize{40pt}{30pt}
+  \bfseries\selectfont
+  \noindent 
+  \raggedright  
+  \BLOCK{ set words = metric.title.upper().split() }
+  \BLOCK{ for word in words }\mbox{\VAR{word|e}}
+  \BLOCK{ if not loop.last } \BLOCK{ endif }\BLOCK{ endfor }
+
+\endgroup
+
+    \vspace{0.3cm}
+    \par \textit{\VAR{ metric.description | e }}
+  \end{minipage}
+  &
+  \begin{minipage}[t]{0.4\textwidth}
+  {\subtitlefont\color{hydrosenscyan}\bfseries\fontsize{50pt}{40pt}\selectfont \VAR{ "%.2f"|format(metric.mean_value) | e }}\\[0.3cm]
+    \HydroSubtitle{\textbf{MEAN VALUE}}\\[-0.3cm]
+
+\noindent\color{hydrosenscyan}\rule{5.2cm}{2pt}\\[0.3cm]
+    \setstretch{1.5}
+    \raggedright
+    \HydroContent{\VAR{ metric.mean_insight | e }}
+  \end{minipage}
+\end{tabularx}
+
+\vspace{2cm}
+
+% Time series insight and chart image on same line
+\noindent
+\begin{tabularx}{\textwidth}{@{}X r@{}}
+  % Left column – Time Series Insight block, aligned top
+  \begin{minipage}[t]{0.48\textwidth}
+    \vspace{0pt} % ensure top alignment
+    \HydroSubtitle{TIME SERIES INSIGHT}\\[-0.5ex]
+    \noindent\color{hydrosenscyan}\rule{6cm}{2pt}
+    \vspace{0.3cm}
+
+    \setstretch{1.5}
+    \HydroContent{\VAR{ metric.time_insight | e }}
+  \end{minipage}
+  &
+  % Right column – image aligned top
+  \begin{minipage}[t]{0.48\textwidth}
+    \vspace{0pt}
+    \includegraphics[width=\linewidth]{\VAR{ metric.graph_image_path | e }}
+  \end{minipage}
+\end{tabularx}
+
+\vfill
+
+% Bottom border line
+\noindent\color{teal}\rule{\textwidth}{2pt}
+
+\BLOCK{ endif }
+\BLOCK{ endfor }
+
+% Action Plans Page
+\newpage
+
+\vspace*{-0.5cm}
+\noindent\HydroTitle{ACTION PLANS}
+
+% Light blue line under the heading
+\vspace{0.5\baselineskip}
+\noindent\color{hydrosenscyan}\rule{0.25\textwidth}{3pt}
+\vspace{2\baselineskip}
+
+\noindent\begin{minipage}{\textwidth} % \noindent ensures the minipage starts flush with the left margin
+\setstretch{1.5}
+\color{black}
+\begin{itemize}[leftmargin=*, rightmargin=0pt] % Adjusts list margins
+    \BLOCK{ for action in action_plan }
+    \item \HydroContent{\VAR{ action | e }}
+    \BLOCK{ endfor }
+\end{itemize}
+\end{minipage}
+
+% --- Image at the bottom of the page (no margins) ---
+\begin{tikzpicture}[remember picture,overlay]
+    \node[anchor=south west, inner sep=0pt, outer sep=0pt] at (current page.south west) {
+        \includegraphics[width=\paperwidth,height=10cm]{assets/images/action.jpg} % Adjust height as needed
+    };
+\end{tikzpicture}
+% --- End of image block ---
+
+\end{document}
