@@ -1,5 +1,6 @@
 services:
     frontend:
+        image: tt0312/hydrosens-application:frontend
         build:
             context: ./frontend # Frontend React application
         container_name: frontend
@@ -16,8 +17,8 @@ services:
             - api
             - hydrosens
         restart: unless-stopped
-
     hydrosens:
+        image: tt0312/hydrosens-application:hydrosens
         build:
             context: ./hydrosens # Folder where the HydroSENS Dockerfile is
         container_name: hydrosens
@@ -34,6 +35,7 @@ services:
         env_file:
             - ./hydrosens/.env
     api:
+        image: tt0312/hydrosens-application:api
         build:
             context: ./api-app # Your API is in current directory
         container_name: analyze
@@ -55,3 +57,4 @@ services:
 networks:
     app-network:
         driver: bridge
+

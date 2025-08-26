@@ -268,6 +268,9 @@ function RegionDashboard({ onPdfOverlayToggle }: RegionDashboardProps) {
                     const padding = range * 0.5;
                     min = Number((dataMin - padding).toFixed(2));
                     max = Number((dataMax + padding).toFixed(2));
+                } else if (dataMax - dataMin < 0.01) {
+                    min = Number((dataMin - 0.01).toFixed(2));
+                    max = Number((dataMax + 0.01).toFixed(2));
                 } else {
                     // Use actual data range with small padding
                     const range = dataMax - dataMin;
