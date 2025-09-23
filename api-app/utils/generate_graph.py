@@ -60,15 +60,22 @@ def generate_graphs(metrics_data, report_data, graph_output_dir="data/assets/gra
             max_val = metric_data.max()
             padded_top = max(1, max_val * 1.2)
             ax.set_ylim(bottom=0, top=padded_top)
-            
-        # data line
-        metric_data.plot(
-            ax=ax,
-            marker='o',
-            markersize=8,
-            linewidth=4,
-            color='#33c3ff'                         # keep bright‐blue line
-        )
+
+            # data bars for precipitation
+            ax.bar(
+                metric_data.index,
+                metric_data.values,
+                color='#33c3ff'
+            )
+        else:
+            # data line for other metrics
+            metric_data.plot(
+                ax=ax,
+                marker='o',
+                markersize=8,
+                linewidth=4,
+                color='#33c3ff'                         # keep bright‐blue line
+            )
 
         # Add linear regression line if we have more than 1 data point
         if len(metric_data) > 1:
