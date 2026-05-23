@@ -65,8 +65,8 @@ def calculate_trends(metrics_data):
                 percentage_change = 0.0 if end_value == 0 else (100.0 if end_value > 0 else -100.0)
         
         trends[metric_id] = {
-            "percent": round(abs(percentage_change), 2),
-            "uptrend": percentage_change >= 0
+            "percent": float(round(abs(percentage_change), 2)),
+            "uptrend": bool(percentage_change >= 0),
         }
     
     return trends

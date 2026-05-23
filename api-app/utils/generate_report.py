@@ -42,21 +42,28 @@ def run_generate_report(metrics_data, report_name):
         for metric in report_data["metrics"]:
             metric_id = metric.get("id")
             if metric_id in trends:
-                metric["trend"] = trends[metric_id]
-                print(f"Updated trend for {metric_id}: {trends[metric_id]}")
+                trend = trends[metric_id]
+                metric["trend"] = {
+                    "percent": float(trend["percent"]),
+                    "uptrend": bool(trend["uptrend"]),
+                }
+                print(f"Updated trend for {metric_id}: {metric['trend']}")
 
-    # --- 2. Generate graphs using Mathplotlib ---
-    """
-    Use metrics_data to generate timeseries graphs, save as image in assets/graphs.
-    Add image path to each metric datapoint by id (graph_image_path)
-    """  
-    print("Step 2: Generating graphs...")
-    # This function should be defined in your utils/generate_graph.py
-    report_data = generate_graphs(metrics_data, report_data)
     if not report_data:
-        print("No graphs generated, check metrics_data format.")
-    else:
-        print("Graphs generated successfully")
+        print("Report content generation failed; aborting before graph step.")
+        return None
+
+    # --- 2. Generate graphs (Pillow; matplotlib savefig hangs in Docker) ---
+    print("Step 2: Generating graphs...")
+    report_data = generate_graphs(
+        metrics_data,
+        report_data,
+        graph_output_dir="/app/data/assets/graphs",
+    )
+    graphs_written = sum(
+        1 for m in report_data.get("metrics", []) if m.get("graph_image_path")
+    )
+    print(f"Graphs generated successfully ({graphs_written} images)")
 
 
     print("Step 3: Generating region satellite map...")

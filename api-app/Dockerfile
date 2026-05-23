@@ -10,7 +10,12 @@ ENV PYTHONPATH=/app
 # Install system dependencies (for shapefile processing if needed later)
 RUN apt-get update && apt-get install -y \
     curl \
+    fonts-dejavu-core \
+    fontconfig \
+    libfreetype6 \
     && rm -rf /var/lib/apt/lists/*
+
+ENV MPLBACKEND=Agg
 
 # Insall latexmk for Latex report generation
 RUN apt-get update && apt-get install -y \

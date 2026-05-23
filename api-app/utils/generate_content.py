@@ -76,7 +76,7 @@ def generate_content(input_dict):
             client = genai.Client(api_key=api_key)
 
             response = client.models.generate_content(
-                model="gemini-2.0-flash",
+                model="gemini-2.5-flash-lite",
                 contents=final_prompt,
                 config={
                     "response_mime_type": "application/json",
